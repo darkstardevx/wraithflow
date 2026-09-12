@@ -185,6 +185,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "773648b94d0e5d620f64f280777445740e61fe701025087ec8b57f45c791888b"
 
 [[package]]
+name = "cybercore"
+version = "0.3.1"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "equivalent"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -689,6 +697,7 @@ version = "0.1.0"
 dependencies = [
  "base64",
  "colored_json",
+ "cybercore",
  "serde",
  "serde_json",
  "wf-core",

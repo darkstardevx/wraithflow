@@ -134,13 +134,15 @@ struct ProxyConfig {
 #[derive(Deserialize, Debug, Clone)]
 struct OutputProfile {
     name: String,
-    /// "hexdump" | "json" | "raw" | "base64"
+    /// "hexdump" | "json" | "raw" | "base64" | "compact"
     #[serde(default = "default_format")]
     format: String,
     /// Pretty-print JSON output. Ignored by other formats.
     #[serde(default)]
     pretty: bool,
-    /// Syntax-highlight JSON, or colorize hexdump/raw/base64 output.
+    /// Syntax-highlight JSON, or colorize hexdump/raw/base64/compact output.
+    /// Colors come from the shared cybercore CYBERGRID palette
+    /// ($CYBERGRID_THEME picks which theme, same as cyberdesk/cyberdeck).
     #[serde(default = "default_color")]
     color: bool,
     /// Drop packets smaller than this many bytes.
@@ -152,6 +154,17 @@ struct OutputProfile {
     /// Only log packets whose bytes contain this substring.
     #[serde(default)]
     contains: Option<String>,
+    /// Mask every occurrence of these substrings with `*` before logging.
+    /// Runs after `contains` filtering (which still sees the real bytes) —
+    /// so you can gate on a secret's presence without printing the secret.
+    #[serde(default)]
+    redact: Vec<String>,
+    /// Color-highlight matches of these substrings in the output. Only
+    /// applies to "raw" and "compact" formats (hexdump/json/base64 have a
+    /// fixed structure a spliced-in color code would corrupt). Runs after
+    /// redact, so a highlighted match can't reveal a redacted one.
+    #[serde(default)]
+    highlight: Vec<String>,
 }
 
 #[derive(Deserialize, Debug, Default)]
@@ -193,7 +206,7 @@ fn validate(config: &AppConfig) -> Result<(), String> {
     for profile in &config.output {
         if OutputFormat::parse(&profile.format).is_none() {
             return Err(format!(
-                "output profile \"{}\" has an unknown format \"{}\" (expected hexdump, json, raw, or base64)",
+                "output profile \"{}\" has an unknown format \"{}\" (expected hexdump, json, raw, base64, or compact)",
                 profile.name, profile.format
             ));
         }
@@ -237,6 +250,8 @@ fn resolve_output(proxy: &ProxyConfig, profiles: &[OutputProfile]) -> OutputSpec
             direction,
             contains: profile.contains.as_ref().map(|s| s.as_bytes().to_vec()),
         },
+        redact: wf_packet::Redactor::new(&profile.redact),
+        highlight: profile.highlight.iter().filter(|s| !s.is_empty()).map(|s| s.as_bytes().to_vec()).collect(),
     }
 }
 

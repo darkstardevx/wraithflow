@@ -23,7 +23,8 @@ packets you care about get rendered.
 ```
 wraithflow/            binary — loads config, wires it all together
 crates/wf-core/         shared primitives: Packet, Direction, BufferPool, stats registry
-crates/wf-packet/       formatting (hexdump/json/raw/base64) + filtering, built on wf-core
+crates/wf-packet/       formatting (hexdump/json/raw/base64/compact), filtering, redaction, and
+                        highlighting — colors sourced from the shared `cybercore` CYBERGRID palette
 crates/wf-proxy/        the accept/forward loop — uses wf-core + wf-packet, no formatting logic of its own
 ```
 
@@ -62,24 +63,39 @@ log_payloads = false    # off for anything carrying secrets — see below
 
 [[output]]
 name = "json-pretty"
-format = "json"         # "hexdump" | "json" | "raw" | "base64"
+format = "json"         # "hexdump" | "json" | "raw" | "base64" | "compact"
 pretty = true
-color = true            # syntax-highlight JSON / colorize hexdump-raw-base64
+color = true            # syntax-highlight JSON / colorize the rest — from the
+                         # shared cybercore CYBERGRID palette, not hardcoded
+                         # ANSI. $CYBERGRID_THEME picks the theme, same as
+                         # cyberdesk/cyberdeck (defaults to "neon-night").
 min_bytes = 0           # drop anything smaller than this
 direction = ""          # "inbound" | "outbound" — omit for both
 contains = ""           # only log packets whose bytes contain this substring
+redact = []             # mask matching substrings with `*` before logging —
+                         # runs AFTER `contains` (which still sees real bytes)
+highlight = []          # color-highlight matching substrings — "raw"/"compact"
+                         # formats only; runs after redact
 ```
 
 A `[[proxies]]` entry with no `output` gets a plain, unfiltered hexdump — the
 original behavior. Output profiles are named and reusable, so several
 pipelines can point at the same one.
 
+**`redact` vs. `highlight`vs. `contains`**: all three take substrings, but do
+different things. `contains` decides *whether* a packet gets logged at all
+(and still sees the real, unredacted bytes). `redact` then masks matches
+with `*` in what actually gets printed. `highlight` colors matches instead
+of hiding them — for flagging things like error codes, not secrets — and
+only affects `raw`/`compact` (hexdump/JSON/base64 have a fixed structure a
+spliced-in color code would break).
+
 > [!WARNING]
 > Payload logging writes bytes that cross a pipeline to stdout. Under systemd
-> that lands in `journalctl` indefinitely. Turn `log_payloads` off (or filter
-> tightly) for any pipeline carrying credentials, tokens, or other sensitive
-> data — `secure-db-relay` above ships muted by default for exactly this
-> reason.
+> that lands in `journalctl` indefinitely. Turn `log_payloads` off, filter
+> tightly, or `redact` the sensitive parts for any pipeline carrying
+> credentials, tokens, or other sensitive data — `secure-db-relay` above
+> ships muted by default for exactly this reason.
 
 ## 📊 Monitoring a pipeline
 
@@ -145,8 +161,11 @@ this is a shortcut, not a privilege change.
 - [x] Startup validation (duplicate ports, bad addresses, dangling output refs)
 - [x] systemd unit
 - [x] `wf-core` — shared `Packet`/`Direction` primitives, pooled buffers, stats registry
-- [x] `wf-packet` — hexdump / JSON (pretty + colored) / raw / base64 output, packet filtering
+- [x] `wf-packet` — hexdump / JSON (pretty + colored) / raw / base64 / compact output, packet filtering
 - [x] Per-pipeline live stats (`connections`, `bytes`, `errors`)
+- [x] `--admin --start/--stop/--restart/--status` service control, no `systemctl` incantation needed
+- [x] `redact` (mask secrets) and `highlight` (flag patterns) on output profiles
+- [x] Colors sourced from the shared `cybercore` CYBERGRID palette instead of hardcoded ANSI
 - [ ] `wf-bpf` — optional eBPF kernel-space capture path (design TBD — needs root + a kernel-facing toolchain like `aya`; bigger scope than the userspace proxy, see the darknotes design note before starting)
 - [ ] Structured/leveled logging (`tracing`) instead of `println!`
 - [ ] Log file output with rotation (currently relies on journald)

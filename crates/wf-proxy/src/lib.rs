@@ -5,7 +5,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 
 use wf_core::{BufferPool, Direction, PipelineStats};
-use wf_packet::{OutputFormat, PacketFilter};
+use wf_packet::{OutputFormat, PacketFilter, Redactor};
 
 /// Everything that controls how a pipeline logs the traffic crossing it.
 /// `enabled: false` is the fast path — no `Packet` gets built at all, so a
@@ -17,6 +17,12 @@ pub struct OutputSpec {
     pub pretty: bool,
     pub color: bool,
     pub filter: PacketFilter,
+    /// Applied to bytes that pass `filter`, before rendering — masks
+    /// matching substrings with `*` so they never reach the log.
+    pub redact: Redactor,
+    /// Colors matching substrings (Raw/Compact formats only). Applied
+    /// after `redact`, so a highlight pattern can't un-hide a redacted one.
+    pub highlight: Vec<Vec<u8>>,
 }
 
 impl Default for OutputSpec {
@@ -27,6 +33,8 @@ impl Default for OutputSpec {
             pretty: false,
             color: true,
             filter: PacketFilter::default(),
+            redact: Redactor::default(),
+            highlight: Vec::new(),
         }
     }
 }
@@ -120,11 +128,14 @@ fn log_chunk(pipeline_name: &str, direction: Direction, bytes: &[u8], output: &O
     if !output.enabled {
         return;
     }
-    let packet = wf_core::Packet::pooled(pool, pipeline_name, direction, bytes);
+    let mut packet = wf_core::Packet::pooled(pool, pipeline_name, direction, bytes);
     if !output.filter.matches(&packet) {
         packet.recycle(pool);
         return;
     }
-    println!("{}", wf_packet::render(&packet, output.format, output.pretty, output.color));
+    if !output.redact.is_empty() {
+        output.redact.apply(&mut packet.bytes);
+    }
+    println!("{}", wf_packet::render(&packet, output.format, output.pretty, output.color, &output.highlight));
     packet.recycle(pool);
 }

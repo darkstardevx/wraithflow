@@ -5,6 +5,8 @@
 
 mod filter;
 mod format;
+mod redact;
 
 pub use filter::PacketFilter;
 pub use format::{render, OutputFormat};
+pub use redact::Redactor;
