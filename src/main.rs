@@ -19,6 +19,58 @@ struct Args {
     /// then ./config.toml / ./config.json in the working directory.
     #[arg(short, long)]
     config: Option<PathBuf>,
+
+    /// Manage the wraithflow systemd service instead of running the proxy
+    /// directly. Combine with exactly one of --start/--stop/--restart/--status.
+    /// start/stop/restart shell out to `sudo systemctl` and prompt for your
+    /// password same as typing it yourself; status doesn't need sudo.
+    #[arg(long)]
+    admin: bool,
+
+    #[arg(long, requires = "admin")]
+    start: bool,
+    #[arg(long, requires = "admin")]
+    stop: bool,
+    #[arg(long, requires = "admin")]
+    restart: bool,
+    #[arg(long, requires = "admin")]
+    status: bool,
+}
+
+/// Runs `systemctl <action> wraithflow`, `sudo`-prefixed for anything that
+/// mutates service state. Inherits this process's stdio, so an interactive
+/// sudo password prompt shows up exactly as if you'd typed the systemctl
+/// command yourself.
+fn run_admin(args: &Args) -> io::Result<i32> {
+    let action = match (args.start, args.stop, args.restart, args.status) {
+        (true, false, false, false) => "start",
+        (false, true, false, false) => "stop",
+        (false, false, true, false) => "restart",
+        (false, false, false, true) => "status",
+        (false, false, false, false) => {
+            eprintln!("--admin needs exactly one of --start, --stop, --restart, --status");
+            return Ok(1);
+        }
+        _ => {
+            eprintln!("--admin takes exactly one of --start, --stop, --restart, --status, not several at once");
+            return Ok(1);
+        }
+    };
+
+    let mut cmd = if action == "status" {
+        let mut c = std::process::Command::new("systemctl");
+        c.arg("status");
+        c
+    } else {
+        let mut c = std::process::Command::new("sudo");
+        c.args(["systemctl", action]);
+        c
+    };
+    cmd.arg("wraithflow");
+
+    println!("\x1b[35m[admin]\x1b[0m {:?}", cmd);
+    let status = cmd.status()?;
+    Ok(status.code().unwrap_or(1))
 }
 
 fn default_config_path() -> Option<PathBuf> {
@@ -210,6 +262,12 @@ fn print_banner() {
 #[tokio::main]
 async fn main() -> io::Result<()> {
     let args = Args::parse();
+
+    if args.admin {
+        let code = run_admin(&args)?;
+        std::process::exit(code);
+    }
+
     print_banner();
 
     let config_path = args.config.or_else(default_config_path).ok_or_else(|| {

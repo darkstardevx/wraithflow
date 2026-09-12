@@ -123,6 +123,20 @@ systemctl status wraithflow
 journalctl -u wraithflow -f
 ```
 
+Or, since `wraithflow` itself is on `PATH` (symlinked into `~/.local/bin`),
+skip remembering `systemctl`/`sudo` entirely:
+
+```bash
+wraithflow --admin --status    # no sudo needed
+wraithflow --admin --start
+wraithflow --admin --stop
+wraithflow --admin --restart
+```
+
+These just shell out to `systemctl`/`sudo systemctl` with your stdio
+attached — a real sudo prompt appears same as typing the command directly,
+this is a shortcut, not a privilege change.
+
 ## 🗺 Roadmap
 
 - [x] Config-driven multi-pipeline proxying
