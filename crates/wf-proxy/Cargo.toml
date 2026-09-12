@@ -1,0 +1,8 @@
+[package]
+name = "wf-proxy"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+[dependencies]
+tokio = { version = "1.38", features = ["full"] }
