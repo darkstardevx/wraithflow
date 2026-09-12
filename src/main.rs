@@ -2,7 +2,7 @@ use clap::Parser;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::fs;
-use std::io;
+use std::io::{self, Write};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -68,7 +68,14 @@ fn run_admin(args: &Args) -> io::Result<i32> {
     };
     cmd.arg("wraithflow");
 
-    println!("\x1b[35m[admin]\x1b[0m {:?}", cmd);
+    // Plain text, explicitly flushed, before handing the terminal to sudo's
+    // own interactive password prompt: color codes and unflushed buffering
+    // here have been observed to garble that handoff under at least one
+    // terminal/pty bridge (leftover bytes getting fed back to the shell as
+    // a bogus follow-up command). Keep this boring on purpose.
+    let prefix = if action == "status" { "" } else { "sudo " };
+    println!("[admin] running: {}systemctl {} wraithflow", prefix, action);
+    io::stdout().flush()?;
     let status = cmd.status()?;
     Ok(status.code().unwrap_or(1))
 }
