@@ -1,0 +1,8 @@
+[package]
+name = "wf-core"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+[dependencies]
+chrono = { version = "0.4", features = ["serde"] }

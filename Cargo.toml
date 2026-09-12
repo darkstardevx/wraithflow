@@ -2,6 +2,8 @@
 resolver = "2"
 members = [
     "crates/wf-proxy",
+    "crates/wf-core",
+    "crates/wf-packet",
 ]
 
 [workspace.package]
@@ -17,6 +19,8 @@ authors.workspace = true
 
 [dependencies]
 wf-proxy = { path = "crates/wf-proxy" }
+wf-core = { path = "crates/wf-core" }
+wf-packet = { path = "crates/wf-packet" }
 tokio = { version = "1.38", features = ["full"] }
 clap = { version = "4.5", features = ["derive"] }
 serde = { version = "1.0", features = ["derive"] }

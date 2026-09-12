@@ -1,9 +1,44 @@
 use std::io;
+use std::sync::atomic::Ordering;
+use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 
-// Update the signature to accept the 'name' attribute
-pub async fn start_proxy(name: &str, listen_addr: &str, target_addr: &str, log_payloads: bool) -> io::Result<()> {
+use wf_core::{BufferPool, Direction, PipelineStats};
+use wf_packet::{OutputFormat, PacketFilter};
+
+/// Everything that controls how a pipeline logs the traffic crossing it.
+/// `enabled: false` is the fast path — no `Packet` gets built at all, so a
+/// muted pipeline (e.g. a DB relay) pays zero formatting cost per byte.
+#[derive(Clone)]
+pub struct OutputSpec {
+    pub enabled: bool,
+    pub format: OutputFormat,
+    pub pretty: bool,
+    pub color: bool,
+    pub filter: PacketFilter,
+}
+
+impl Default for OutputSpec {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            format: OutputFormat::Hexdump,
+            pretty: false,
+            color: true,
+            filter: PacketFilter::default(),
+        }
+    }
+}
+
+pub async fn start_proxy(
+    name: &str,
+    listen_addr: &str,
+    target_addr: &str,
+    output: OutputSpec,
+    stats: Arc<PipelineStats>,
+    buffer_pool: Arc<BufferPool>,
+) -> io::Result<()> {
     let listener = TcpListener::bind(listen_addr).await?;
     println!(
         "\x1b[35m[{}]\x1b[0m Pipeline active on {} -> forwarding to {}",
@@ -13,20 +48,35 @@ pub async fn start_proxy(name: &str, listen_addr: &str, target_addr: &str, log_p
     loop {
         let (client_stream, client_addr) = listener.accept().await?;
         let target_string = target_addr.to_string();
+        let name = name.to_string();
+        let output = output.clone();
+        let stats = stats.clone();
+        let buffer_pool = buffer_pool.clone();
 
         tokio::spawn(async move {
             println!("\x1b[36m[+ Flow Connected]\x1b[0m Connection tracked from {}", client_addr);
+            stats.connections_total.fetch_add(1, Ordering::Relaxed);
+            stats.connections_active.fetch_add(1, Ordering::Relaxed);
 
-            if let Err(e) = handle_session(client_stream, &target_string, log_payloads).await {
+            if let Err(e) = handle_session(client_stream, &target_string, &name, &output, &stats, &buffer_pool).await {
+                stats.errors_total.fetch_add(1, Ordering::Relaxed);
                 eprintln!("\x1b[31m[! Flow Error]\x1b[0m Pipeline ruptured: {}", e);
             }
 
+            stats.connections_active.fetch_sub(1, Ordering::Relaxed);
             println!("\x1b[33m[- Flow Disconnected]\x1b[0m Session closed for {}", client_addr);
         });
     }
 }
 
-async fn handle_session(mut client_stream: TcpStream, target_addr: &str, log_payloads: bool) -> io::Result<()> {
+async fn handle_session(
+    mut client_stream: TcpStream,
+    target_addr: &str,
+    pipeline_name: &str,
+    output: &OutputSpec,
+    stats: &Arc<PipelineStats>,
+    buffer_pool: &Arc<BufferPool>,
+) -> io::Result<()> {
     let mut target_stream = TcpStream::connect(target_addr).await?;
 
     // Break streams down into readable/writable raw splits
@@ -40,7 +90,8 @@ async fn handle_session(mut client_stream: TcpStream, target_addr: &str, log_pay
             let bytes_read = client_reader.read(&mut buffer).await?;
             if bytes_read == 0 { break; } // EOF reached
 
-            if log_payloads { log_payload("OUTBOUND", &buffer[..bytes_read]); }
+            stats.bytes_out.fetch_add(bytes_read as u64, Ordering::Relaxed);
+            log_chunk(pipeline_name, Direction::Outbound, &buffer[..bytes_read], output, buffer_pool);
             target_writer.write_all(&buffer[..bytes_read]).await?;
         }
         io::Result::Ok(())
@@ -53,7 +104,8 @@ async fn handle_session(mut client_stream: TcpStream, target_addr: &str, log_pay
             let bytes_read = target_reader.read(&mut buffer).await?;
             if bytes_read == 0 { break; } // EOF reached
 
-            if log_payloads { log_payload("INBOUND", &buffer[..bytes_read]); }
+            stats.bytes_in.fetch_add(bytes_read as u64, Ordering::Relaxed);
+            log_chunk(pipeline_name, Direction::Inbound, &buffer[..bytes_read], output, buffer_pool);
             client_writer.write_all(&buffer[..bytes_read]).await?;
         }
         io::Result::Ok(())
@@ -64,21 +116,15 @@ async fn handle_session(mut client_stream: TcpStream, target_addr: &str, log_pay
     Ok(())
 }
 
-/// Formats and renders raw intercepted traffic payloads to the screen
-fn log_payload(direction: &str, data: &[u8]) {
-    let color = if direction == "OUTBOUND" { "\x1b[32m" } else { "\x1b[34m" };
-    let reset = "\x1b[0m";
-    
-    println!("\n{}[{} Payload - {} bytes]{}", color, direction, data.len(), reset);
-    
-    // Generate clean hex-dump visual overview
-    for chunk in data.chunks(16) {
-        let hex_string: Vec<String> = chunk.iter().map(|b| format!("{:02X}", b)).collect();
-        let ascii_string: String = chunk.iter().map(|&b| {
-            if b >= 32 && b <= 126 { b as char } else { '.' }
-        }).collect();
-        
-        println!("  {:48} | {}", hex_string.join(" "), ascii_string);
+fn log_chunk(pipeline_name: &str, direction: Direction, bytes: &[u8], output: &OutputSpec, pool: &BufferPool) {
+    if !output.enabled {
+        return;
     }
-    println!();
+    let packet = wf_core::Packet::pooled(pool, pipeline_name, direction, bytes);
+    if !output.filter.matches(&packet) {
+        packet.recycle(pool);
+        return;
+    }
+    println!("{}", wf_packet::render(&packet, output.format, output.pretty, output.color));
+    packet.recycle(pool);
 }
