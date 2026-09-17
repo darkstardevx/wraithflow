@@ -3,10 +3,11 @@ name = "wf-packet"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
+license.workspace = true
 
 [dependencies]
 wf-core = { path = "../wf-core" }
-cybercore = { path = "/home/raven/.sysops/cybercore" }
+cybercore = "0.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 colored_json = "5"

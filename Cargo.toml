@@ -9,13 +9,15 @@ members = [
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
-authors = ["Your Name <you@example.com>"]
+authors = ["darkstardevx <darkstardevx@gmail.com>"]
+license = "MIT"
 
 [package]
 name = "wraithflow"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
+license.workspace = true
 
 [dependencies]
 wf-proxy = { path = "crates/wf-proxy" }

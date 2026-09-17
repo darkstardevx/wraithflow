@@ -1,0 +1,49 @@
+# WraithFlow — proxy pipeline config
+# Each [[proxies]] entry spawns its own listener that forwards to `target`
+# and (optionally) logs traffic to stdout (journalctl, under systemd).
+#
+# enabled           — set false to keep a pipeline defined but off, default true
+# log_payloads      — master on/off switch for payload logging, default true.
+#                      Turn off for anything carrying secrets (credentials,
+#                      tokens, query data) — under systemd this lands in
+#                      journalctl forever.
+# output            — name of an [[output]] profile below controlling HOW
+#                      logged payloads are rendered/filtered. Omit for a
+#                      plain, unfiltered hexdump (the original behavior).
+# stats_interval_secs — how often to print a [STATS] line per pipeline
+#                      (connections, bytes, errors). 0 disables it.
+
+stats_interval_secs = 30
+
+[[proxies]]
+name = "http-traffic-gateway"
+listen = "127.0.0.1:45634"
+target = "127.0.0.1:9000"
+enabled = true
+log_payloads = true
+output = "json-pretty"
+
+[[proxies]]
+name = "secure-db-relay"
+listen = "127.0.0.1:3306"
+target = "127.0.0.1:3307"
+enabled = true
+log_payloads = false
+
+# ── output profiles ─────────────────────────────────────────────────────
+# format       — "hexdump" | "json" | "raw" | "base64" | "compact"
+# pretty       — pretty-print JSON (ignored by other formats)
+# color        — syntax-highlight JSON, or colorize hexdump/raw/base64/compact
+# min_bytes    — drop packets smaller than this (default 0 = no minimum)
+# direction    — "inbound" | "outbound" to log one direction only (default: both)
+# contains     — only log packets whose raw bytes contain this substring
+# redact       — mask matching substrings with `*` before logging (after `contains`)
+# highlight    — color-highlight matching substrings (raw/compact formats only)
+
+[[output]]
+name = "json-pretty"
+format = "json"
+pretty = true
+color = true
+min_bytes = 5          # drop tiny keepalive-ish chunks
+direction = "outbound" # only log client -> target, not the response coming back

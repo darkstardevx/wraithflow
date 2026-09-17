@@ -3,6 +3,7 @@ name = "wf-proxy"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
+license.workspace = true
 
 [dependencies]
 wf-core = { path = "../wf-core" }
