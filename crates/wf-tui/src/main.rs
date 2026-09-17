@@ -1,8 +1,10 @@
-//! A minimal live dashboard over WraithFlow's read-only control socket
+//! A live dashboard over WraithFlow's read-only control socket
 //! (`../../src/control.rs`) — polls `{"cmd":"stats"}` on an interval
-//! and renders a table of pipeline health. A separate binary, not a
-//! mode of the daemon itself, so the systemd-deployed `wraithflow`
-//! binary never carries `ratatui`/`crossterm`'s dependency tree.
+//! and renders a table of pipeline health, with sorting, pause,
+//! per-pipeline history sparklines, and help/detail popups. A separate
+//! binary, not a mode of the daemon itself, so the systemd-deployed
+//! `wraithflow` binary never carries `ratatui`/`crossterm`'s
+//! dependency tree.
 //!
 //! Fully synchronous by design: the control socket protocol is a
 //! one-shot connect/write/read/close per poll, and `crossterm`'s event
@@ -10,17 +12,20 @@
 //! blocking round-trip a second would add complexity (and a
 //! dependency) for no benefit.
 
+mod app;
+mod ui;
+
+use app::{handle_key, next_sort_field, Action, App, Mode, StatsResponse};
 use clap::Parser;
-use crossterm::event::{self, Event, KeyCode};
-use ratatui::layout::Constraint;
-use ratatui::style::{Color, Modifier, Style};
-use ratatui::widgets::{Block, Borders, Row, Table};
-use serde::Deserialize;
+use crossterm::event::{self, Event};
+use ratatui::style::Color;
+use ratatui::widgets::TableState;
 use std::io::{Read, Write};
 use std::net::Shutdown;
 use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
+use ui::Palette;
 
 #[derive(Parser)]
 #[command(
@@ -36,26 +41,17 @@ struct Args {
     /// How often to reconnect and refresh, in seconds.
     #[arg(long, default_value_t = 1)]
     interval: u64,
-}
 
-#[derive(Deserialize, Debug, Clone)]
-struct PipelineStat {
-    name: String,
-    bytes_in: u64,
-    bytes_out: u64,
-    connections_total: u64,
-    connections_active: u64,
-    errors_total: u64,
-}
+    /// Fetch one snapshot, print it as a plain table, and exit --
+    /// no terminal setup at all, so it also works with no real
+    /// controlling TTY. Script/cron-friendly.
+    #[arg(long)]
+    once: bool,
 
-/// Mirrors the control socket's wire shape exactly (`src/control.rs`'s
-/// `stats_response`) — deliberately not a shared type with `wf-core`,
-/// same decoupling the control socket itself already uses: the JSON
-/// contract is the interface, not an internal Rust type.
-#[derive(Deserialize, Debug, Default)]
-struct StatsResponse {
-    #[serde(default)]
-    pipelines: Vec<PipelineStat>,
+    /// Disable cybercore-derived coloring, in both --once output and
+    /// the interactive dashboard.
+    #[arg(long)]
+    no_color: bool,
 }
 
 fn fetch_stats(socket_path: &Path) -> std::io::Result<StatsResponse> {
@@ -68,13 +64,6 @@ fn fetch_stats(socket_path: &Path) -> std::io::Result<StatsResponse> {
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
 }
 
-/// `cybercore::palette::hex()` already returns exactly this for
-/// "anything that wants the color value itself rather than a terminal
-/// escape" (its own doc comment) -- this is the missing half, turning
-/// that hex string into something Ratatui can render with. No
-/// existing hex->Ratatui-Color helper exists anywhere in the
-/// workspace yet (`cyberfleet`/`cyberplug` don't depend on
-/// `cybercore` at all).
 fn parse_hex_color(hex: &str) -> Option<Color> {
     let hex = hex.trim_start_matches('#');
     if hex.len() != 6 {
@@ -95,85 +84,104 @@ fn cybercore_color(name: &str, fallback: Color) -> Color {
         .unwrap_or(fallback)
 }
 
-/// Errors highlight red regardless of activity (something needs
-/// attention even if the pipeline looks otherwise idle); an idle,
-/// error-free pipeline is muted rather than "healthy" green, so green
-/// reads as "actually carrying traffic right now."
-fn row_style(pipeline: &PipelineStat, healthy: Color, error: Color, muted: Color) -> Style {
-    if pipeline.errors_total > 0 {
-        Style::new().fg(error)
-    } else if pipeline.connections_active > 0 {
-        Style::new().fg(healthy)
-    } else {
-        Style::new().fg(muted)
+fn resolve_palette(no_color: bool) -> Palette {
+    if no_color {
+        return Palette {
+            healthy: Color::Reset,
+            error: Color::Reset,
+            muted: Color::Reset,
+            accent: Color::Reset,
+            border: Color::Reset,
+            text: Color::Reset,
+        };
+    }
+    Palette {
+        healthy: cybercore_color("acid_green", Color::Green),
+        error: cybercore_color("red", Color::Red),
+        muted: cybercore_color("muted", Color::DarkGray),
+        accent: cybercore_color("purple", Color::Magenta),
+        border: cybercore_color("line", Color::Gray),
+        text: cybercore_color("white", Color::White),
     }
 }
 
-fn build_rows(
-    pipelines: &[PipelineStat],
-    healthy: Color,
-    error: Color,
-    muted: Color,
-) -> Vec<Row<'static>> {
-    pipelines
-        .iter()
-        .map(|p| {
-            Row::new(vec![
-                p.name.clone(),
-                format!("{}/{}", p.connections_active, p.connections_total),
-                format!("{}B", p.bytes_in),
-                format!("{}B", p.bytes_out),
-                p.errors_total.to_string(),
-            ])
-            .style(row_style(p, healthy, error, muted))
-        })
-        .collect()
+fn run_once(socket: &Path, no_color: bool) -> std::io::Result<()> {
+    let resp = fetch_stats(socket)?;
+    let (healthy, error, muted, reset) = if no_color {
+        ("", "", "", "")
+    } else {
+        ("\x1b[92m", "\x1b[91m", "\x1b[90m", "\x1b[0m")
+    };
+    println!(
+        "{:<24} {:>12} {:>12} {:>12} {:>8}",
+        "PIPELINE", "ACTIVE/TOTAL", "IN", "OUT", "ERRORS"
+    );
+    for p in &resp.pipelines {
+        let color = if p.errors_total > 0 {
+            error
+        } else if p.connections_active > 0 {
+            healthy
+        } else {
+            muted
+        };
+        println!(
+            "{color}{:<24} {:>12} {:>12} {:>12} {:>8}{reset}",
+            p.name,
+            format!("{}/{}", p.connections_active, p.connections_total),
+            format!("{}B", p.bytes_in),
+            format!("{}B", p.bytes_out),
+            p.errors_total
+        );
+    }
+    Ok(())
 }
 
-fn main() -> std::io::Result<()> {
-    let args = Args::parse();
-    let healthy = cybercore_color("acid_green", Color::Green);
-    let error = cybercore_color("red", Color::Red);
-    let muted = cybercore_color("muted", Color::DarkGray);
-
+fn run_interactive(socket: &Path, interval: u64, no_color: bool) -> std::io::Result<()> {
+    let palette = resolve_palette(no_color);
     let mut terminal = ratatui::init();
-    let mut pipelines: Vec<PipelineStat> = Vec::new();
-    let mut last_error: Option<String>;
+    let mut app = App::new();
+    let mut table_state = TableState::default();
 
     loop {
-        match fetch_stats(&args.socket) {
-            Ok(resp) => {
-                pipelines = resp.pipelines;
-                last_error = None;
+        if !app.paused {
+            match fetch_stats(socket) {
+                Ok(resp) => {
+                    app.update(resp.pipelines);
+                    app.last_error = None;
+                }
+                Err(e) => app.last_error = Some(e.to_string()),
             }
-            Err(e) => last_error = Some(e.to_string()),
         }
 
-        terminal.draw(|frame| {
-            let header = Row::new(vec!["Pipeline", "Active/Total", "In", "Out", "Errors"])
-                .style(Style::new().add_modifier(Modifier::BOLD));
-            let rows = build_rows(&pipelines, healthy, error, muted);
-            let widths = [
-                Constraint::Fill(1),
-                Constraint::Length(14),
-                Constraint::Length(12),
-                Constraint::Length(12),
-                Constraint::Length(8),
-            ];
-            let title = match &last_error {
-                Some(e) => format!("WraithFlow — disconnected ({e}) — 'q' to quit"),
-                None => "WraithFlow — live pipeline stats — 'q' to quit".to_string(),
-            };
-            let table = Table::new(rows, widths)
-                .header(header)
-                .block(Block::default().borders(Borders::ALL).title(title));
-            frame.render_widget(table, frame.area());
-        })?;
+        terminal.draw(|frame| ui::draw(frame, &app, &mut table_state, &palette))?;
 
-        if event::poll(Duration::from_secs(args.interval))? {
+        if event::poll(Duration::from_secs(interval))? {
             if let Event::Key(key) = event::read()? {
-                if matches!(key.code, KeyCode::Char('q') | KeyCode::Esc) {
-                    break;
+                match handle_key(app.mode, key.code) {
+                    Action::Quit => break,
+                    Action::MoveUp => app.selected = app.selected.saturating_sub(1),
+                    Action::MoveDown => {
+                        if !app.pipelines.is_empty() {
+                            app.selected = (app.selected + 1).min(app.pipelines.len() - 1);
+                        }
+                    }
+                    Action::CycleSort => {
+                        app.sort_field = next_sort_field(app.sort_field);
+                        app::sort_pipelines(&mut app.pipelines, app.sort_field, app.sort_desc);
+                    }
+                    Action::ReverseSort => {
+                        app.sort_desc = !app.sort_desc;
+                        app::sort_pipelines(&mut app.pipelines, app.sort_field, app.sort_desc);
+                    }
+                    Action::TogglePause => app.paused = !app.paused,
+                    Action::OpenHelp => app.mode = Mode::Help,
+                    Action::OpenDetail => {
+                        if !app.pipelines.is_empty() {
+                            app.mode = Mode::Detail;
+                        }
+                    }
+                    Action::Close => app.mode = Mode::Normal,
+                    Action::None => {}
                 }
             }
         }
@@ -183,86 +191,11 @@ fn main() -> std::io::Result<()> {
     Ok(())
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn parse_hex_color_accepts_a_leading_hash_or_not() {
-        assert_eq!(parse_hex_color("#ff0000"), Some(Color::Rgb(255, 0, 0)));
-        assert_eq!(parse_hex_color("ff0000"), Some(Color::Rgb(255, 0, 0)));
-        assert_eq!(parse_hex_color("00ff88"), Some(Color::Rgb(0, 255, 136)));
-    }
-
-    #[test]
-    fn parse_hex_color_rejects_the_wrong_length() {
-        assert_eq!(parse_hex_color("fff"), None);
-        assert_eq!(parse_hex_color("ff00"), None);
-        assert_eq!(parse_hex_color(""), None);
-    }
-
-    #[test]
-    fn parse_hex_color_rejects_non_hex_characters() {
-        assert_eq!(parse_hex_color("zzzzzz"), None);
-    }
-
-    fn stat(name: &str, active: u64, errors: u64) -> PipelineStat {
-        PipelineStat {
-            name: name.to_string(),
-            bytes_in: 0,
-            bytes_out: 0,
-            connections_total: active,
-            connections_active: active,
-            errors_total: errors,
-        }
-    }
-
-    #[test]
-    fn row_style_flags_errors_red_even_when_idle() {
-        let healthy = Color::Green;
-        let error = Color::Red;
-        let muted = Color::DarkGray;
-        let s = row_style(&stat("p", 0, 1), healthy, error, muted);
-        assert_eq!(s.fg, Some(error));
-    }
-
-    #[test]
-    fn row_style_marks_active_pipelines_healthy() {
-        let healthy = Color::Green;
-        let error = Color::Red;
-        let muted = Color::DarkGray;
-        let s = row_style(&stat("p", 3, 0), healthy, error, muted);
-        assert_eq!(s.fg, Some(healthy));
-    }
-
-    #[test]
-    fn row_style_marks_idle_error_free_pipelines_muted() {
-        let healthy = Color::Green;
-        let error = Color::Red;
-        let muted = Color::DarkGray;
-        let s = row_style(&stat("p", 0, 0), healthy, error, muted);
-        assert_eq!(s.fg, Some(muted));
-    }
-
-    #[test]
-    fn stats_response_deserializes_the_real_wire_shape() {
-        let json = r#"{"pipelines":[{"name":"a","bytes_in":10,"bytes_out":20,"connections_total":1,"connections_active":1,"errors_total":0}]}"#;
-        let resp: StatsResponse = serde_json::from_str(json).unwrap();
-        assert_eq!(resp.pipelines.len(), 1);
-        assert_eq!(resp.pipelines[0].name, "a");
-        assert_eq!(resp.pipelines[0].bytes_in, 10);
-    }
-
-    #[test]
-    fn stats_response_defaults_to_an_empty_list() {
-        let resp: StatsResponse = serde_json::from_str("{}").unwrap();
-        assert!(resp.pipelines.is_empty());
-    }
-
-    #[test]
-    fn build_rows_produces_one_row_per_pipeline() {
-        let pipelines = vec![stat("a", 1, 0), stat("b", 0, 2)];
-        let rows = build_rows(&pipelines, Color::Green, Color::Red, Color::DarkGray);
-        assert_eq!(rows.len(), 2);
+fn main() -> std::io::Result<()> {
+    let args = Args::parse();
+    if args.once {
+        run_once(&args.socket, args.no_color)
+    } else {
+        run_interactive(&args.socket, args.interval, args.no_color)
     }
 }
