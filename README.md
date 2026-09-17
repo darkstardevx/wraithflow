@@ -141,6 +141,18 @@ cargo build --release
 ./target/release/wraithflow --config other.toml
 ```
 
+### Contributing
+
+One-time setup to run the fast gates (fmt/clippy/check) automatically
+before every commit:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+`./scripts/release-gates full` (fmt/clippy/check/test/`cargo deny
+check`) is the full gate set — run it before pushing.
+
 ### As a service
 
 `systemd/wraithflow.service` runs the release binary against
