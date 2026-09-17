@@ -4,6 +4,7 @@ members = [
     "crates/wf-proxy",
     "crates/wf-core",
     "crates/wf-packet",
+    "crates/wf-tui",
 ]
 
 [workspace.package]

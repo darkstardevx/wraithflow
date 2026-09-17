@@ -26,6 +26,8 @@ crates/wf-core/         shared primitives: Packet, Direction, BufferPool, stats 
 crates/wf-packet/       formatting (hexdump/json/raw/base64/compact), filtering, redaction, and
                         highlighting — colors sourced from the shared `cybercore` CYBERGRID palette
 crates/wf-proxy/        the accept/forward loop — uses wf-core + wf-packet, no formatting logic of its own
+crates/wf-tui/          live dashboard over the control socket (see below) — a separate binary so the
+                        daemon itself never carries ratatui/crossterm's dependency tree
 ```
 
 `wf-proxy` doesn't know what a hexdump or a JSON record looks like — it just
@@ -124,6 +126,21 @@ echo '{"cmd":"stats"}' | socat - UNIX-CONNECT:/run/wraithflow/control.sock
 One request, one JSON response, connection closes — poll it by
 reconnecting on whatever interval you need. Owner-only permissions
 (`0600`) by default; disabled entirely unless `control_socket` is set.
+
+That's exactly what `wf-tui` does — a live terminal dashboard over the
+same socket:
+
+```bash
+cargo run -p wf-tui -- --socket /run/wraithflow/control.sock --interval 1
+```
+
+A table of every pipeline (active/total connections, bytes each way,
+errors), refreshed every `--interval` seconds by reconnecting to the
+socket, colored via the shared `cybercore` CYBERGRID palette the same
+way `wf-packet`'s own output formats are (green = actively carrying
+traffic, red = `errors_total > 0`, muted = idle and error-free).
+`q`/`Esc` to quit. Requires `control_socket` to be set in
+`config.toml` first — it has nothing to connect to otherwise.
 
 **Reading it as someone newer to networking:** `listen` is the address
 *clients connect to* — it's WraithFlow pretending to be the real service.
