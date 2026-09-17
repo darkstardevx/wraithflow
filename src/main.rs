@@ -103,6 +103,15 @@ fn run_admin(args: &Args) -> io::Result<i32> {
     Ok(status.code().unwrap_or(1))
 }
 
+fn expand_home(path: &str) -> PathBuf {
+    if let Some(rest) = path.strip_prefix("~/") {
+        if let Ok(home) = std::env::var("HOME") {
+            return PathBuf::from(home).join(rest);
+        }
+    }
+    PathBuf::from(path)
+}
+
 fn default_config_path() -> Option<PathBuf> {
     let config_home = std::env::var("XDG_CONFIG_HOME")
         .map(PathBuf::from)
@@ -221,6 +230,13 @@ struct AppConfig {
     /// this timeout ever gets a chance to.
     #[serde(default = "default_shutdown_drain_secs")]
     shutdown_drain_secs: u64,
+    /// Path for an optional shared JSONL capture log -- every logged
+    /// packet across every pipeline, one file, not per-pipeline. Omit to
+    /// disable (today's stdout-only behavior, unchanged). Exists so a
+    /// separate tool (Echo) can browse captured traffic instead of only
+    /// ever seeing it scroll past in `journalctl -u wraithflow`.
+    #[serde(default)]
+    capture_log: Option<String>,
 }
 
 /// Fail fast on config problems that would otherwise surface one task at a
@@ -270,7 +286,11 @@ fn validate(config: &AppConfig) -> Result<(), String> {
 
 /// Turn a named `[[output]]` profile (or the absence of one) into the
 /// `OutputSpec` `wf-proxy` actually runs with.
-fn resolve_output(proxy: &ProxyConfig, profiles: &[OutputProfile]) -> OutputSpec {
+fn resolve_output(
+    proxy: &ProxyConfig,
+    profiles: &[OutputProfile],
+    capture_log: Option<Arc<wf_proxy::CaptureLog>>,
+) -> OutputSpec {
     let profile = proxy
         .output
         .as_ref()
@@ -279,6 +299,7 @@ fn resolve_output(proxy: &ProxyConfig, profiles: &[OutputProfile]) -> OutputSpec
     let Some(profile) = profile else {
         return OutputSpec {
             enabled: proxy.log_payloads,
+            capture_log,
             ..OutputSpec::default()
         };
     };
@@ -310,6 +331,7 @@ fn resolve_output(proxy: &ProxyConfig, profiles: &[OutputProfile]) -> OutputSpec
             .filter(|s| !s.is_empty())
             .map(|s| s.as_bytes().to_vec())
             .collect(),
+        capture_log,
     }
 }
 
@@ -415,6 +437,25 @@ async fn main() -> io::Result<()> {
         config.proxies.len() - enabled_count
     );
 
+    // Best-effort, not fail-fast like `validate()` above -- a capture log
+    // that can't be opened (bad permissions, disk full) shouldn't stop
+    // the proxy itself from forwarding traffic, which is the actual job.
+    let capture_log: Option<Arc<wf_proxy::CaptureLog>> =
+        config.capture_log.as_deref().and_then(|path| {
+            match wf_proxy::CaptureLog::open(&expand_home(path)) {
+                Ok(log) => {
+                    tracing::info!("\x1b[35m[Capture Log]\x1b[0m Writing captures to {path}");
+                    Some(Arc::new(log))
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        "[Capture Log] could not open {path}: {e} -- continuing without it"
+                    );
+                    None
+                }
+            }
+        });
+
     let shutdown = wf_proxy::Shutdown {
         token: CancellationToken::new(),
         tracker: TaskTracker::new(),
@@ -441,7 +482,7 @@ async fn main() -> io::Result<()> {
 
     // Iterate through the profiles and kick off a dedicated worker task for each one
     for proxy in config.proxies.into_iter().filter(|p| p.enabled) {
-        let output = resolve_output(&proxy, &config.output);
+        let output = resolve_output(&proxy, &config.output, capture_log.clone());
         let stats = stats_registry.get_or_create(&proxy.name);
         let buffer_pool = buffer_pool.clone();
         let shutdown = shutdown.clone();
@@ -610,6 +651,7 @@ mod tests {
             stats_interval_secs: 30,
             control_socket: None,
             shutdown_drain_secs: 8,
+            capture_log: None,
         };
         assert!(validate(&config).is_ok());
     }
@@ -625,6 +667,7 @@ mod tests {
             stats_interval_secs: 30,
             control_socket: None,
             shutdown_drain_secs: 8,
+            capture_log: None,
         };
         assert!(validate(&config).is_err());
     }
@@ -639,6 +682,7 @@ mod tests {
             stats_interval_secs: 30,
             control_socket: None,
             shutdown_drain_secs: 8,
+            capture_log: None,
         };
         assert!(validate(&config).is_ok());
     }
@@ -651,6 +695,7 @@ mod tests {
             stats_interval_secs: 30,
             control_socket: None,
             shutdown_drain_secs: 8,
+            capture_log: None,
         };
         assert!(validate(&config).is_err());
     }
@@ -665,6 +710,7 @@ mod tests {
             stats_interval_secs: 30,
             control_socket: None,
             shutdown_drain_secs: 8,
+            capture_log: None,
         };
         assert!(validate(&config).is_err());
     }
@@ -677,6 +723,7 @@ mod tests {
             stats_interval_secs: 30,
             control_socket: None,
             shutdown_drain_secs: 8,
+            capture_log: None,
         };
         assert!(validate(&config).is_err());
     }
@@ -691,6 +738,7 @@ mod tests {
             stats_interval_secs: 30,
             control_socket: None,
             shutdown_drain_secs: 8,
+            capture_log: None,
         };
         assert!(validate(&config).is_err());
     }
@@ -699,7 +747,7 @@ mod tests {
     fn resolve_output_with_no_profile_uses_log_payloads_and_defaults() {
         let mut p = proxy("a", "127.0.0.1:1000", "127.0.0.1:2000");
         p.log_payloads = false;
-        let output = resolve_output(&p, &[]);
+        let output = resolve_output(&p, &[], None);
         assert!(!output.enabled);
         assert_eq!(output.format, OutputFormat::Hexdump);
     }
@@ -714,7 +762,7 @@ mod tests {
         prof.direction = Some("outbound".to_string());
         prof.contains = Some("GET".to_string());
 
-        let output = resolve_output(&p, &[prof]);
+        let output = resolve_output(&p, &[prof], None);
         assert_eq!(output.format, OutputFormat::Json);
         assert!(output.pretty);
         assert_eq!(output.filter.min_bytes, 10);
@@ -729,7 +777,7 @@ mod tests {
         let mut prof = profile("prof", "json");
         prof.direction = Some("sideways".to_string());
 
-        let output = resolve_output(&p, &[prof]);
+        let output = resolve_output(&p, &[prof], None);
         assert_eq!(output.filter.direction, None);
     }
 }

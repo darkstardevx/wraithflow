@@ -34,6 +34,19 @@ impl OutputFormat {
             _ => None,
         }
     }
+
+    /// Inverse of `parse` — the canonical name for this format, used by
+    /// the optional capture-log JSONL output so a consumer (e.g. Echo)
+    /// knows how to interpret `rendered` without re-guessing.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Hexdump => "hexdump",
+            Self::Json => "json",
+            Self::Raw => "raw",
+            Self::Base64 => "base64",
+            Self::Compact => "compact",
+        }
+    }
 }
 
 /// The two CYBERGRID roles used for direction — picked to read the same

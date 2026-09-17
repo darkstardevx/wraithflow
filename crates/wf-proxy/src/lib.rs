@@ -1,6 +1,9 @@
+use std::fs::{File, OpenOptions};
 use std::io;
+use std::io::Write;
+use std::path::Path;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio_util::sync::CancellationToken;
@@ -8,6 +11,57 @@ use tokio_util::task::TaskTracker;
 
 use wf_core::{BufferPool, Direction, PipelineStats};
 use wf_packet::{OutputFormat, PacketFilter, Redactor};
+
+/// An optional, shared JSONL sink for every logged packet across every
+/// pipeline (not per-pipeline — one stream, like `println!`'s stdout
+/// already is). Exists so a separate tool (Echo) can browse captured
+/// traffic instead of only ever seeing it scroll past in
+/// `journalctl -u wraithflow`. Deliberately doesn't replace or change the
+/// existing `println!` — this is an addition, not a redirect.
+pub struct CaptureLog {
+    file: Mutex<File>,
+}
+
+impl CaptureLog {
+    /// Opens (creating parent directories and the file itself if needed)
+    /// for appending. One open per process lifetime — the caller holds
+    /// this in an `Arc`, cloned into every pipeline's `OutputSpec`.
+    pub fn open(path: &Path) -> io::Result<Self> {
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        let file = OpenOptions::new().create(true).append(true).open(path)?;
+        Ok(Self {
+            file: Mutex::new(file),
+        })
+    }
+
+    /// Appends one line. Errors are logged, not propagated — a capture-log
+    /// write failure (disk full, permissions) shouldn't take down the
+    /// proxy itself, the same reasoning as the existing packet-recycling
+    /// and stats-update paths that also never fail the connection.
+    fn write_line(&self, line: &str) {
+        let mut file = match self.file.lock() {
+            Ok(f) => f,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        if let Err(e) = writeln!(file, "{line}") {
+            tracing::warn!("[Capture Log] failed to write: {e}");
+        }
+    }
+}
+
+/// One logged packet, exactly as written to the capture log — `rendered`
+/// is the same string `println!` already printed (same formatting,
+/// same redaction already applied), not a second independent rendering.
+#[derive(serde::Serialize)]
+struct CaptureRecord<'a> {
+    pipeline: &'a str,
+    direction: &'static str,
+    at: String,
+    format: &'static str,
+    rendered: &'a str,
+}
 
 /// Everything that controls how a pipeline logs the traffic crossing it.
 /// `enabled: false` is the fast path — no `Packet` gets built at all, so a
@@ -25,6 +79,10 @@ pub struct OutputSpec {
     /// Colors matching substrings (Raw/Compact formats only). Applied
     /// after `redact`, so a highlight pattern can't un-hide a redacted one.
     pub highlight: Vec<Vec<u8>>,
+    /// Shared across every pipeline — `None` unless `capture_log` is set
+    /// in the top-level config, in which case every pipeline writes into
+    /// the same file (see `CaptureLog`'s own doc comment for why).
+    pub capture_log: Option<Arc<CaptureLog>>,
 }
 
 impl Default for OutputSpec {
@@ -37,6 +95,7 @@ impl Default for OutputSpec {
             filter: PacketFilter::default(),
             redact: Redactor::default(),
             highlight: Vec::new(),
+            capture_log: None,
         }
     }
 }
@@ -219,16 +278,44 @@ fn log_chunk(
     if !output.redact.is_empty() {
         output.redact.apply(&mut packet.bytes);
     }
-    println!(
-        "{}",
-        wf_packet::render(
-            &packet,
-            output.format,
-            output.pretty,
-            output.color,
-            &output.highlight
-        )
+    let rendered = wf_packet::render(
+        &packet,
+        output.format,
+        output.pretty,
+        output.color,
+        &output.highlight,
     );
+    println!("{rendered}");
+    if let Some(capture_log) = &output.capture_log {
+        // Rendered fresh with color:false — `rendered` above may carry
+        // embedded ANSI escape codes (whatever `output.color` says for
+        // this pipeline's *terminal* output), but a consumer like Echo
+        // applies its own cybercore theme in its own UI and shouldn't
+        // have to strip WraithFlow's ANSI codes first. Only pays this
+        // extra render cost when a capture log is actually configured.
+        let capture_rendered = if output.color {
+            wf_packet::render(
+                &packet,
+                output.format,
+                output.pretty,
+                false,
+                &output.highlight,
+            )
+        } else {
+            rendered.clone()
+        };
+        let record = CaptureRecord {
+            pipeline: pipeline_name,
+            direction: packet.direction.as_str(),
+            at: packet.timestamp.to_rfc3339(),
+            format: output.format.as_str(),
+            rendered: &capture_rendered,
+        };
+        match serde_json::to_string(&record) {
+            Ok(line) => capture_log.write_line(&line),
+            Err(e) => tracing::warn!("[Capture Log] failed to serialize record: {e}"),
+        }
+    }
     packet.recycle(pool);
 }
 
@@ -319,5 +406,44 @@ mod tests {
         tokio::time::timeout(std::time::Duration::from_secs(2), shutdown.tracker.wait())
             .await
             .expect("session should drain quickly after the client disconnects");
+    }
+
+    #[test]
+    fn log_chunk_writes_a_real_line_to_a_configured_capture_log() {
+        let dir =
+            std::env::temp_dir().join(format!("wf-proxy-capture-test-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let log_path = dir.join("captures.jsonl");
+
+        let capture_log = Arc::new(CaptureLog::open(&log_path).unwrap());
+        let output = OutputSpec {
+            format: OutputFormat::Compact,
+            capture_log: Some(capture_log),
+            ..OutputSpec::default()
+        };
+        let pool = BufferPool::default();
+
+        log_chunk(
+            "test-pipeline",
+            Direction::Outbound,
+            b"hello capture log",
+            &output,
+            &pool,
+        );
+
+        let contents = std::fs::read_to_string(&log_path).unwrap();
+        let line = contents.lines().next().expect("expected exactly one line");
+        let record: serde_json::Value = serde_json::from_str(line).unwrap();
+        assert_eq!(record["pipeline"], "test-pipeline");
+        assert_eq!(record["direction"], "OUTBOUND");
+        assert_eq!(record["format"], "compact");
+        assert!(record["rendered"].as_str().unwrap().contains("hello"));
+        // Compact format includes ANSI color codes when `color: true` is
+        // the pipeline's terminal setting (OutputSpec::default() sets it),
+        // but the capture log always renders with color:false -- the
+        // whole point of the separate render in log_chunk.
+        assert!(!record["rendered"].as_str().unwrap().contains('\x1b'));
+
+        std::fs::remove_dir_all(&dir).ok();
     }
 }
