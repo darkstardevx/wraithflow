@@ -12,8 +12,15 @@
 #                      plain, unfiltered hexdump (the original behavior).
 # stats_interval_secs — how often to print a [STATS] line per pipeline
 #                      (connections, bytes, errors). 0 disables it.
+# control_socket    — path for a read-only Unix control socket exposing
+#                      live per-pipeline stats as JSON (for a future TUI
+#                      or monitoring script) — see control.rs. Omit to
+#                      disable (the default); under systemd this should
+#                      point inside RuntimeDirectory (see
+#                      systemd/wraithflow.service).
 
 stats_interval_secs = 30
+# control_socket = "/run/wraithflow/control.sock"
 
 [[proxies]]
 name = "http-traffic-gateway"

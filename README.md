@@ -112,6 +112,19 @@ These print as a `[STATS]` line every `stats_interval_secs` (default 30s),
 per pipeline, whether or not payload logging is on — so you get throughput
 and health visibility even on a muted pipeline like `secure-db-relay`.
 
+The same counters are also available on demand, without scraping
+`journalctl`, if `control_socket` is set in config.toml — a read-only
+Unix socket for a future TUI or monitoring script to query:
+
+```bash
+echo '{"cmd":"stats"}' | socat - UNIX-CONNECT:/run/wraithflow/control.sock
+# {"pipelines":[{"name":"http-traffic-gateway","bytes_in":0,"bytes_out":0,"connections_total":0,"connections_active":0,"errors_total":0}, ...]}
+```
+
+One request, one JSON response, connection closes — poll it by
+reconnecting on whatever interval you need. Owner-only permissions
+(`0600`) by default; disabled entirely unless `control_socket` is set.
+
 **Reading it as someone newer to networking:** `listen` is the address
 *clients connect to* — it's WraithFlow pretending to be the real service.
 `target` is where WraithFlow actually forwards the traffic to — the real
@@ -173,6 +186,8 @@ this is a shortcut, not a privilege change.
 - [x] `--admin --start/--stop/--restart/--status` service control, no `systemctl` incantation needed
 - [x] `redact` (mask secrets) and `highlight` (flag patterns) on output profiles
 - [x] Colors sourced from the shared `cybercore` CYBERGRID palette instead of hardcoded ANSI
+- [x] Read-only Unix control socket for live stats (`control_socket`) — a foundation for a future TUI
+- [ ] A TUI consuming the control socket above
 - [ ] `wf-bpf` — optional eBPF kernel-space capture path (design TBD — needs root + a kernel-facing toolchain like `aya`; bigger scope than the userspace proxy, see the darknotes design note before starting)
 - [ ] Structured/leveled logging (`tracing`) instead of `println!`
 - [ ] Log file output with rotation (currently relies on journald)

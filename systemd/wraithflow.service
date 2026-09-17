@@ -13,10 +13,19 @@ Restart=on-failure
 RestartSec=5
 TimeoutStopSec=10
 
+# /run/wraithflow/, owned by User=/Group= above, recreated fresh on
+# every start -- the systemd-sanctioned way to get a real writable
+# directory under ProtectSystem=strict (below) without loosening it
+# further. Used for the optional control_socket (control.rs) when
+# config.toml sets control_socket = "/run/wraithflow/control.sock".
+RuntimeDirectory=wraithflow
+RuntimeDirectoryMode=0700
+
 # Sandboxing. Real runtime footprint: binds the TCP ports named in
 # config.toml, connects onward to each pipeline's target, reads that
-# one config file under $HOME, and logs to stdout (journald) --
-# nothing else. Unlike ApexDaemon (which spawns arbitrary
+# one config file under $HOME, optionally serves live stats over the
+# Unix control socket above, and logs to stdout (journald) -- nothing
+# else. Unlike ApexDaemon (which spawns arbitrary
 # user-configured shell commands and needed a much narrower,
 # carefully-bounded set of directives after a live conflict with this
 # host's setuid-firejail ssh wrapper broke most of them), WraithFlow's
@@ -39,10 +48,10 @@ LockPersonality=true
 RestrictRealtime=true
 RestrictSUIDSGID=true
 MemoryDenyWriteExecute=true
-# Plain TCP listen/connect only -- no AF_UNIX (no D-Bus/notify calls,
-# unlike ApexDaemon), no AF_NETLINK (no nft/netlink calls, unlike
-# ghostport-firewall).
-RestrictAddressFamilies=AF_INET AF_INET6
+# TCP for pipelines, AF_UNIX for the optional control_socket (see
+# RuntimeDirectory above) -- no AF_NETLINK (no nft/netlink calls,
+# unlike ghostport-firewall).
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
 # No pipeline in config.toml binds a privileged (<1024) port.
 CapabilityBoundingSet=
 

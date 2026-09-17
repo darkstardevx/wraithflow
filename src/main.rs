@@ -1,3 +1,5 @@
+mod control;
+
 use clap::Parser;
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -200,6 +202,11 @@ struct AppConfig {
     /// How often to log a `[STATS]` summary per pipeline. 0 disables it.
     #[serde(default = "default_stats_interval")]
     stats_interval_secs: u64,
+    /// Path for a read-only Unix control socket exposing live stats as
+    /// JSON (see `control.rs`). Omit to disable -- no implicit default
+    /// path, no new attack surface unless explicitly opted into.
+    #[serde(default)]
+    control_socket: Option<String>,
 }
 
 /// Fail fast on config problems that would otherwise surface one task at a
@@ -439,6 +446,18 @@ async fn main() -> io::Result<()> {
         }));
     }
 
+    if let Some(path) = config.control_socket {
+        let stats = stats_registry.clone();
+        tasks.push(tokio::spawn(async move {
+            if let Err(e) = control::serve(std::path::Path::new(&path), stats).await {
+                eprintln!(
+                    "\x1b[31m[control]\x1b[0m Failed to serve on {}: {}",
+                    path, e
+                );
+            }
+        }));
+    }
+
     // Keep the runtime listening loop alive indefinitely across all routing components
     for task in tasks {
         let _ = task.await;
@@ -502,6 +521,7 @@ mod tests {
             proxies: vec![proxy("a", "127.0.0.1:1000", "127.0.0.1:2000")],
             output: vec![],
             stats_interval_secs: 30,
+            control_socket: None,
         };
         assert!(validate(&config).is_ok());
     }
@@ -515,6 +535,7 @@ mod tests {
             ],
             output: vec![],
             stats_interval_secs: 30,
+            control_socket: None,
         };
         assert!(validate(&config).is_err());
     }
@@ -527,6 +548,7 @@ mod tests {
             proxies: vec![proxy("a", "127.0.0.1:1000", "127.0.0.1:2000"), disabled],
             output: vec![],
             stats_interval_secs: 30,
+            control_socket: None,
         };
         assert!(validate(&config).is_ok());
     }
@@ -537,6 +559,7 @@ mod tests {
             proxies: vec![proxy("a", "not-an-address", "127.0.0.1:2000")],
             output: vec![],
             stats_interval_secs: 30,
+            control_socket: None,
         };
         assert!(validate(&config).is_err());
     }
@@ -549,6 +572,7 @@ mod tests {
             proxies: vec![p],
             output: vec![],
             stats_interval_secs: 30,
+            control_socket: None,
         };
         assert!(validate(&config).is_err());
     }
@@ -559,6 +583,7 @@ mod tests {
             proxies: vec![],
             output: vec![profile("p", "not-a-format")],
             stats_interval_secs: 30,
+            control_socket: None,
         };
         assert!(validate(&config).is_err());
     }
@@ -571,6 +596,7 @@ mod tests {
             proxies: vec![],
             output: vec![p],
             stats_interval_secs: 30,
+            control_socket: None,
         };
         assert!(validate(&config).is_err());
     }
