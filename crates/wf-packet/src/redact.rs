@@ -15,7 +15,11 @@ pub struct Redactor {
 impl Redactor {
     pub fn new(patterns: &[String]) -> Self {
         Self {
-            patterns: patterns.iter().filter(|p| !p.is_empty()).map(|p| p.as_bytes().to_vec()).collect(),
+            patterns: patterns
+                .iter()
+                .filter(|p| !p.is_empty())
+                .map(|p| p.as_bytes().to_vec())
+                .collect(),
         }
     }
 

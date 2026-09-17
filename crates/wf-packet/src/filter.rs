@@ -49,7 +49,10 @@ mod tests {
 
     #[test]
     fn min_bytes_filters_small_packets() {
-        let filter = PacketFilter { min_bytes: 10, ..Default::default() };
+        let filter = PacketFilter {
+            min_bytes: 10,
+            ..Default::default()
+        };
         let small = Packet::new("p", Direction::Outbound, b"hi");
         let big = Packet::new("p", Direction::Outbound, b"hello world!");
         assert!(!filter.matches(&small));

@@ -30,7 +30,8 @@ impl BufferPool {
     /// Borrow a buffer, empty and ready to be filled.
     pub fn acquire(&self) -> Vec<u8> {
         let mut free = self.free.lock().unwrap();
-        free.pop().unwrap_or_else(|| Vec::with_capacity(self.buf_size))
+        free.pop()
+            .unwrap_or_else(|| Vec::with_capacity(self.buf_size))
     }
 
     /// Return a buffer for reuse. Dropped instead of pooled once `max_idle`

@@ -61,7 +61,13 @@ struct PacketRecord<'a> {
     hex: String,
 }
 
-pub fn render(packet: &Packet, format: OutputFormat, pretty: bool, color: bool, highlight: &[Vec<u8>]) -> String {
+pub fn render(
+    packet: &Packet,
+    format: OutputFormat,
+    pretty: bool,
+    color: bool,
+    highlight: &[Vec<u8>],
+) -> String {
     match format {
         OutputFormat::Hexdump => render_hexdump(packet, color),
         OutputFormat::Json => render_json(packet, pretty, color),
@@ -105,33 +111,67 @@ fn apply_highlight(bytes: &[u8], patterns: &[Vec<u8>]) -> Vec<u8> {
 }
 
 fn render_hexdump(packet: &Packet, color: bool) -> String {
-    let (c, r) = if color { (direction_color(packet.direction), reset().to_string()) } else { (String::new(), String::new()) };
+    let (c, r) = if color {
+        (direction_color(packet.direction), reset().to_string())
+    } else {
+        (String::new(), String::new())
+    };
 
-    let mut out = format!("\n{}[{} Payload - {} bytes]{}\n", c, packet.direction.as_str(), packet.len(), r);
+    let mut out = format!(
+        "\n{}[{} Payload - {} bytes]{}\n",
+        c,
+        packet.direction.as_str(),
+        packet.len(),
+        r
+    );
 
     for chunk in packet.bytes.chunks(16) {
         let hex_string: Vec<String> = chunk.iter().map(|b| format!("{:02X}", b)).collect();
         let ascii_string: String = chunk
             .iter()
-            .map(|&b| if (32..=126).contains(&b) { b as char } else { '.' })
+            .map(|&b| {
+                if (32..=126).contains(&b) {
+                    b as char
+                } else {
+                    '.'
+                }
+            })
             .collect();
-        out.push_str(&format!("  {:48} | {}\n", hex_string.join(" "), ascii_string));
+        out.push_str(&format!(
+            "  {:48} | {}\n",
+            hex_string.join(" "),
+            ascii_string
+        ));
     }
     out
 }
 
 fn render_raw(packet: &Packet, color: bool, highlight: &[Vec<u8>]) -> String {
-    let display_bytes = if color { apply_highlight(&packet.bytes, highlight) } else { packet.bytes.clone() };
+    let display_bytes = if color {
+        apply_highlight(&packet.bytes, highlight)
+    } else {
+        packet.bytes.clone()
+    };
     let text = String::from_utf8_lossy(&display_bytes);
     if color {
-        format!("{}[{}]{} {}", direction_color(packet.direction), packet.direction.as_str(), reset(), text)
+        format!(
+            "{}[{}]{} {}",
+            direction_color(packet.direction),
+            packet.direction.as_str(),
+            reset(),
+            text
+        )
     } else {
         format!("[{}] {}", packet.direction.as_str(), text)
     }
 }
 
 fn render_compact(packet: &Packet, color: bool, highlight: &[Vec<u8>]) -> String {
-    let display_bytes = if color { apply_highlight(&packet.bytes, highlight) } else { packet.bytes.clone() };
+    let display_bytes = if color {
+        apply_highlight(&packet.bytes, highlight)
+    } else {
+        packet.bytes.clone()
+    };
     let mut text: String = String::from_utf8_lossy(&display_bytes)
         .chars()
         .map(|c| if c.is_control() { '.' } else { c })
@@ -140,16 +180,34 @@ fn render_compact(packet: &Packet, color: bool, highlight: &[Vec<u8>]) -> String
         text = text.chars().take(COMPACT_PREVIEW_LEN).collect::<String>() + "…";
     }
     if color {
-        format!("{}[{}]{} {}B \"{}\"", direction_color(packet.direction), packet.direction.as_str(), reset(), packet.len(), text)
+        format!(
+            "{}[{}]{} {}B \"{}\"",
+            direction_color(packet.direction),
+            packet.direction.as_str(),
+            reset(),
+            packet.len(),
+            text
+        )
     } else {
-        format!("[{}] {}B \"{}\"", packet.direction.as_str(), packet.len(), text)
+        format!(
+            "[{}] {}B \"{}\"",
+            packet.direction.as_str(),
+            packet.len(),
+            text
+        )
     }
 }
 
 fn render_base64(packet: &Packet, color: bool) -> String {
     let encoded = BASE64.encode(&packet.bytes);
     if color {
-        format!("{}[{}]{} {}", cybercore::palette::purple(), packet.direction.as_str(), reset(), encoded)
+        format!(
+            "{}[{}]{} {}",
+            cybercore::palette::purple(),
+            packet.direction.as_str(),
+            reset(),
+            encoded
+        )
     } else {
         format!("[{}] {}", packet.direction.as_str(), encoded)
     }

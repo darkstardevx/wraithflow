@@ -62,17 +62,32 @@ pub async fn start_proxy(
         let buffer_pool = buffer_pool.clone();
 
         tokio::spawn(async move {
-            println!("\x1b[36m[+ Flow Connected]\x1b[0m Connection tracked from {}", client_addr);
+            println!(
+                "\x1b[36m[+ Flow Connected]\x1b[0m Connection tracked from {}",
+                client_addr
+            );
             stats.connections_total.fetch_add(1, Ordering::Relaxed);
             stats.connections_active.fetch_add(1, Ordering::Relaxed);
 
-            if let Err(e) = handle_session(client_stream, &target_string, &name, &output, &stats, &buffer_pool).await {
+            if let Err(e) = handle_session(
+                client_stream,
+                &target_string,
+                &name,
+                &output,
+                &stats,
+                &buffer_pool,
+            )
+            .await
+            {
                 stats.errors_total.fetch_add(1, Ordering::Relaxed);
                 eprintln!("\x1b[31m[! Flow Error]\x1b[0m Pipeline ruptured: {}", e);
             }
 
             stats.connections_active.fetch_sub(1, Ordering::Relaxed);
-            println!("\x1b[33m[- Flow Disconnected]\x1b[0m Session closed for {}", client_addr);
+            println!(
+                "\x1b[33m[- Flow Disconnected]\x1b[0m Session closed for {}",
+                client_addr
+            );
         });
     }
 }
@@ -96,10 +111,20 @@ async fn handle_session(
         let mut buffer = [0u8; 4096];
         loop {
             let bytes_read = client_reader.read(&mut buffer).await?;
-            if bytes_read == 0 { break; } // EOF reached
+            if bytes_read == 0 {
+                break;
+            } // EOF reached
 
-            stats.bytes_out.fetch_add(bytes_read as u64, Ordering::Relaxed);
-            log_chunk(pipeline_name, Direction::Outbound, &buffer[..bytes_read], output, buffer_pool);
+            stats
+                .bytes_out
+                .fetch_add(bytes_read as u64, Ordering::Relaxed);
+            log_chunk(
+                pipeline_name,
+                Direction::Outbound,
+                &buffer[..bytes_read],
+                output,
+                buffer_pool,
+            );
             target_writer.write_all(&buffer[..bytes_read]).await?;
         }
         io::Result::Ok(())
@@ -110,10 +135,20 @@ async fn handle_session(
         let mut buffer = [0u8; 4096];
         loop {
             let bytes_read = target_reader.read(&mut buffer).await?;
-            if bytes_read == 0 { break; } // EOF reached
+            if bytes_read == 0 {
+                break;
+            } // EOF reached
 
-            stats.bytes_in.fetch_add(bytes_read as u64, Ordering::Relaxed);
-            log_chunk(pipeline_name, Direction::Inbound, &buffer[..bytes_read], output, buffer_pool);
+            stats
+                .bytes_in
+                .fetch_add(bytes_read as u64, Ordering::Relaxed);
+            log_chunk(
+                pipeline_name,
+                Direction::Inbound,
+                &buffer[..bytes_read],
+                output,
+                buffer_pool,
+            );
             client_writer.write_all(&buffer[..bytes_read]).await?;
         }
         io::Result::Ok(())
@@ -124,7 +159,13 @@ async fn handle_session(
     Ok(())
 }
 
-fn log_chunk(pipeline_name: &str, direction: Direction, bytes: &[u8], output: &OutputSpec, pool: &BufferPool) {
+fn log_chunk(
+    pipeline_name: &str,
+    direction: Direction,
+    bytes: &[u8],
+    output: &OutputSpec,
+    pool: &BufferPool,
+) {
     if !output.enabled {
         return;
     }
@@ -136,6 +177,15 @@ fn log_chunk(pipeline_name: &str, direction: Direction, bytes: &[u8], output: &O
     if !output.redact.is_empty() {
         output.redact.apply(&mut packet.bytes);
     }
-    println!("{}", wf_packet::render(&packet, output.format, output.pretty, output.color, &output.highlight));
+    println!(
+        "{}",
+        wf_packet::render(
+            &packet,
+            output.format,
+            output.pretty,
+            output.color,
+            &output.highlight
+        )
+    );
     packet.recycle(pool);
 }

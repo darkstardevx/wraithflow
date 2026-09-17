@@ -12,7 +12,11 @@ use wf_packet::{OutputFormat, PacketFilter};
 use wf_proxy::OutputSpec;
 
 #[derive(Parser, Debug)]
-#[command(name = "wraithflow", version = "0.1.0", about = "Stealth Traffic Network Proxy & Analyzer")]
+#[command(
+    name = "wraithflow",
+    version = "0.1.0",
+    about = "Stealth Traffic Network Proxy & Analyzer"
+)]
 struct Args {
     /// Path to the proxy routing config (.toml or .json). Defaults to
     /// $XDG_CONFIG_HOME/wraithflow/config.toml, then ~/.config/wraithflow/config.toml,
@@ -232,7 +236,10 @@ fn validate(config: &AppConfig) -> Result<(), String> {
 /// Turn a named `[[output]]` profile (or the absence of one) into the
 /// `OutputSpec` `wf-proxy` actually runs with.
 fn resolve_output(proxy: &ProxyConfig, profiles: &[OutputProfile]) -> OutputSpec {
-    let profile = proxy.output.as_ref().and_then(|name| profiles.iter().find(|o| &o.name == name));
+    let profile = proxy
+        .output
+        .as_ref()
+        .and_then(|name| profiles.iter().find(|o| &o.name == name));
 
     let Some(profile) = profile else {
         return OutputSpec {
@@ -241,11 +248,15 @@ fn resolve_output(proxy: &ProxyConfig, profiles: &[OutputProfile]) -> OutputSpec
         };
     };
 
-    let direction = profile.direction.as_deref().and_then(|d| match d.to_ascii_lowercase().as_str() {
-        "inbound" => Some(Direction::Inbound),
-        "outbound" => Some(Direction::Outbound),
-        _ => None,
-    });
+    let direction =
+        profile
+            .direction
+            .as_deref()
+            .and_then(|d| match d.to_ascii_lowercase().as_str() {
+                "inbound" => Some(Direction::Inbound),
+                "outbound" => Some(Direction::Outbound),
+                _ => None,
+            });
 
     OutputSpec {
         enabled: proxy.log_payloads,
@@ -258,7 +269,12 @@ fn resolve_output(proxy: &ProxyConfig, profiles: &[OutputProfile]) -> OutputSpec
             contains: profile.contains.as_ref().map(|s| s.as_bytes().to_vec()),
         },
         redact: wf_packet::Redactor::new(&profile.redact),
-        highlight: profile.highlight.iter().filter(|s| !s.is_empty()).map(|s| s.as_bytes().to_vec()).collect(),
+        highlight: profile
+            .highlight
+            .iter()
+            .filter(|s| !s.is_empty())
+            .map(|s| s.as_bytes().to_vec())
+            .collect(),
     }
 }
 
@@ -277,8 +293,14 @@ fn print_banner() {
      \/ |_|  \__,_|_|_|\__|_| |_||_|    |_|\___/ \_/\_/    "#;
 
     println!("{}{}{}", bold, teal, ascii_art);
-    println!("  {}» Stealth Traffic Network Proxy & Analyzer // v0.1.0{}", purple, reset);
-    println!("  {}====================================================={}\n", teal, reset);
+    println!(
+        "  {}» Stealth Traffic Network Proxy & Analyzer // v0.1.0{}",
+        purple, reset
+    );
+    println!(
+        "  {}====================================================={}\n",
+        teal, reset
+    );
 }
 
 #[tokio::main]
@@ -302,22 +324,38 @@ async fn main() -> io::Result<()> {
     let raw = fs::read_to_string(&config_path).map_err(|e| {
         io::Error::new(
             io::ErrorKind::NotFound,
-            format!("Failed to open config file {}: {}", config_path.display(), e),
+            format!(
+                "Failed to open config file {}: {}",
+                config_path.display(),
+                e
+            ),
         )
     })?;
 
     let is_json = config_path.extension().and_then(|e| e.to_str()) == Some("json");
     let config: AppConfig = if is_json {
-        serde_json::from_str(&raw)
-            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, format!("Failed to parse JSON config: {}", e)))?
+        serde_json::from_str(&raw).map_err(|e| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("Failed to parse JSON config: {}", e),
+            )
+        })?
     } else {
-        toml::from_str(&raw)
-            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, format!("Failed to parse TOML config: {}", e)))?
+        toml::from_str(&raw).map_err(|e| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("Failed to parse TOML config: {}", e),
+            )
+        })?
     };
 
-    validate(&config).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, format!("Config error: {}", e)))?;
+    validate(&config)
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, format!("Config error: {}", e)))?;
 
-    println!("\x1b[35m[Configuration Loaded]\x1b[0m {}", config_path.display());
+    println!(
+        "\x1b[35m[Configuration Loaded]\x1b[0m {}",
+        config_path.display()
+    );
 
     let enabled_count = config.proxies.iter().filter(|p| p.enabled).count();
     println!(
@@ -337,9 +375,24 @@ async fn main() -> io::Result<()> {
         let buffer_pool = buffer_pool.clone();
 
         let task = tokio::spawn(async move {
-            println!("\x1b[32m[Spawning Worker]\x1b[0m Starting engine module: {}", proxy.name);
-            if let Err(e) = wf_proxy::start_proxy(&proxy.name, &proxy.listen, &proxy.target, output, stats, buffer_pool).await {
-                eprintln!("\x1b[31m[Critical Failure]\x1b[0m Engine error on [{}]: {}", proxy.name, e);
+            println!(
+                "\x1b[32m[Spawning Worker]\x1b[0m Starting engine module: {}",
+                proxy.name
+            );
+            if let Err(e) = wf_proxy::start_proxy(
+                &proxy.name,
+                &proxy.listen,
+                &proxy.target,
+                output,
+                stats,
+                buffer_pool,
+            )
+            .await
+            {
+                eprintln!(
+                    "\x1b[31m[Critical Failure]\x1b[0m Engine error on [{}]: {}",
+                    proxy.name, e
+                );
             }
         });
         tasks.push(task);
@@ -360,7 +413,12 @@ async fn main() -> io::Result<()> {
                 for (name, snap) in registry.snapshot_all() {
                     println!(
                         "\x1b[34m[STATS]\x1b[0m {} — active={} total={} in={}B out={}B errors={}",
-                        name, snap.connections_active, snap.connections_total, snap.bytes_in, snap.bytes_out, snap.errors_total
+                        name,
+                        snap.connections_active,
+                        snap.connections_total,
+                        snap.bytes_in,
+                        snap.bytes_out,
+                        snap.errors_total
                     );
                 }
             }

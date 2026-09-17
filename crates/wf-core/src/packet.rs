@@ -58,7 +58,12 @@ impl Packet {
     /// Same as `new`, but the payload copy comes from a `BufferPool`
     /// instead of a fresh allocation — the path a busy pipeline with
     /// payload logging on should use.
-    pub fn pooled(pool: &BufferPool, pipeline: impl Into<String>, direction: Direction, bytes: &[u8]) -> Self {
+    pub fn pooled(
+        pool: &BufferPool,
+        pipeline: impl Into<String>,
+        direction: Direction,
+        bytes: &[u8],
+    ) -> Self {
         let mut buf = pool.acquire();
         buf.extend_from_slice(bytes);
         Self {
