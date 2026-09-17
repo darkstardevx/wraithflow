@@ -128,10 +128,12 @@ reconnecting on whatever interval you need. Owner-only permissions
 (`0600`) by default; disabled entirely unless `control_socket` is set.
 
 That's exactly what `wf-tui` does — a live terminal dashboard over the
-same socket:
+same socket. Symlinked into `~/.local/bin` the same way `wraithflow`
+itself is, so no `cargo run -p` needed day to day:
 
 ```bash
-cargo run -p wf-tui -- --socket /run/wraithflow/control.sock --interval 1
+wf-tui --socket /run/wraithflow/control.sock --interval 1
+# or, from the repo: cargo run -p wf-tui -- --socket ... --interval ...
 ```
 
 A table of every pipeline (active/total connections, bytes each way,
