@@ -9,3 +9,5 @@ license.workspace = true
 wf-core = { path = "../wf-core" }
 wf-packet = { path = "../wf-packet" }
 tokio = { version = "1.38", features = ["full"] }
+tokio-util = { version = "0.7", features = ["rt"] }
+tracing = "0.1"

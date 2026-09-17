@@ -25,6 +25,9 @@ wf-proxy = { path = "crates/wf-proxy" }
 wf-core = { path = "crates/wf-core" }
 wf-packet = { path = "crates/wf-packet" }
 tokio = { version = "1.38", features = ["full"] }
+tokio-util = "0.7"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 clap = { version = "4.5", features = ["derive"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

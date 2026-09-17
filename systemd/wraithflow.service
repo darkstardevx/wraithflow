@@ -11,6 +11,11 @@ WorkingDirectory=/home/raven/tools/daemons/wraithflow
 ExecStart=/home/raven/.cargo-target/release/wraithflow --config /home/raven/.config/wraithflow/config.toml
 Restart=on-failure
 RestartSec=5
+# On SIGTERM, wraithflow itself waits up to config.toml's
+# shutdown_drain_secs (default 8) for in-flight connections to finish
+# naturally before exiting. Keep this comfortably above that value --
+# otherwise systemd's own SIGKILL cuts the drain short before
+# wraithflow's own timeout ever gets a chance to.
 TimeoutStopSec=10
 
 # /run/wraithflow/, owned by User=/Group= above, recreated fresh on

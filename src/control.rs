@@ -25,7 +25,7 @@ pub async fn serve(socket_path: &Path, stats: StatsRegistry) -> std::io::Result<
     // names and traffic volume have no reason to be readable by every
     // local user by default.
     std::fs::set_permissions(socket_path, std::fs::Permissions::from_mode(0o600))?;
-    println!(
+    tracing::info!(
         "\x1b[35m[control]\x1b[0m Listening on {}",
         socket_path.display()
     );

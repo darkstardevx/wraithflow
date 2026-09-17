@@ -18,9 +18,15 @@
 #                      disable (the default); under systemd this should
 #                      point inside RuntimeDirectory (see
 #                      systemd/wraithflow.service).
+# shutdown_drain_secs — on SIGTERM/Ctrl+C, how long to wait for
+#                      in-flight connections to finish naturally before
+#                      exiting anyway. Default 8 -- keep comfortably
+#                      under systemd/wraithflow.service's TimeoutStopSec
+#                      (10) or systemd's own SIGKILL cuts the drain short.
 
 stats_interval_secs = 30
 # control_socket = "/run/wraithflow/control.sock"
+shutdown_drain_secs = 8
 
 [[proxies]]
 name = "http-traffic-gateway"

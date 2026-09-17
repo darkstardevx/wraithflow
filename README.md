@@ -150,6 +150,35 @@ stuck at 0 almost always means the target isn't listening (wrong port, or
 the real service is down) — WraithFlow accepted the client fine, then
 failed to connect onward.
 
+## 📋 Logging
+
+Structured via [`tracing`](https://docs.rs/tracing) — `RUST_LOG` controls
+verbosity (defaults to `info` if unset):
+
+```bash
+RUST_LOG=debug wraithflow   # also shows per-connection [+ Flow Connected]/
+                             # [- Flow Disconnected] chatter, hidden by
+                             # default now that there's a way to turn it
+                             # down (previously always printed)
+```
+
+`info` (the default) covers pipeline lifecycle (startup, drain, errors)
+and the periodic `[STATS]` line; `warn` covers a single connection's
+recoverable error (target refused, etc.); `debug` adds the per-connection
+churn. `--admin`'s own output (`--admin --status` etc.) is unaffected —
+that's direct command output to whoever's running it, not a log line.
+
+## 🛑 Graceful shutdown
+
+On SIGTERM (`systemctl stop`/`restart`) or Ctrl+C, WraithFlow stops
+accepting *new* connections on every pipeline immediately, then waits up
+to `shutdown_drain_secs` (default 8, config.toml) for connections already
+in flight to finish naturally before exiting — a restart or stop no
+longer hard-resets every open connection instantly. Keep
+`shutdown_drain_secs` comfortably under `systemd/wraithflow.service`'s
+`TimeoutStopSec` (currently 10), or systemd's own SIGKILL cuts the drain
+short before WraithFlow's own timeout gets a chance to.
+
 ## ▶️ Running
 
 ```bash
@@ -216,11 +245,11 @@ this is a shortcut, not a privilege change.
 - [x] `redact` (mask secrets) and `highlight` (flag patterns) on output profiles
 - [x] Colors sourced from the shared `cybercore` CYBERGRID palette instead of hardcoded ANSI
 - [x] Read-only Unix control socket for live stats (`control_socket`) — a foundation for a future TUI
-- [ ] A TUI consuming the control socket above
+- [x] `wf-tui` — live dashboard consuming the control socket
+- [x] Structured/leveled logging (`tracing`) instead of `println!` — `RUST_LOG` controls verbosity (see below)
+- [x] Graceful shutdown / connection draining on SIGTERM (and Ctrl+C) — `shutdown_drain_secs`
 - [ ] `wf-bpf` — optional eBPF kernel-space capture path (design TBD — needs root + a kernel-facing toolchain like `aya`; bigger scope than the userspace proxy, see the darknotes design note before starting)
-- [ ] Structured/leveled logging (`tracing`) instead of `println!`
 - [ ] Log file output with rotation (currently relies on journald)
-- [ ] Graceful shutdown / connection draining on SIGTERM
 - [ ] UDP pipeline support
 
 ## 📄 License

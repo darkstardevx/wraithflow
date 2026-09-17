@@ -9,6 +9,9 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
+use tokio_util::sync::CancellationToken;
+use tokio_util::task::TaskTracker;
+
 use wf_core::{BufferPool, Direction, StatsRegistry};
 use wf_packet::{OutputFormat, PacketFilter};
 use wf_proxy::OutputSpec;
@@ -134,6 +137,10 @@ fn default_stats_interval() -> u64 {
     30
 }
 
+fn default_shutdown_drain_secs() -> u64 {
+    8
+}
+
 // Map the config file structure directly into native Rust data objects
 #[derive(Deserialize, Debug, Clone)]
 struct ProxyConfig {
@@ -207,6 +214,13 @@ struct AppConfig {
     /// path, no new attack surface unless explicitly opted into.
     #[serde(default)]
     control_socket: Option<String>,
+    /// On SIGTERM/Ctrl+C, how long to wait for in-flight connections to
+    /// finish naturally before exiting anyway. Keep this comfortably
+    /// under systemd/wraithflow.service's TimeoutStopSec (currently 10)
+    /// -- otherwise systemd's own SIGKILL cuts the drain short before
+    /// this timeout ever gets a chance to.
+    #[serde(default = "default_shutdown_drain_secs")]
+    shutdown_drain_secs: u64,
 }
 
 /// Fail fast on config problems that would otherwise surface one task at a
@@ -333,6 +347,22 @@ async fn main() -> io::Result<()> {
         std::process::exit(code);
     }
 
+    // journald (under systemd) already timestamps every line, and the
+    // target module path tracing adds by default is redundant with the
+    // existing [pipeline-name]/[Configuration] bracket tags every
+    // message already carries -- both are turned off so tracing only
+    // adds levels/filtering, not a second, competing log style.
+    // Messages keep their existing manually-embedded cybercore ANSI
+    // codes, so the formatter's own coloring is left off too.
+    let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"));
+    tracing_subscriber::fmt()
+        .without_time()
+        .with_target(false)
+        .with_ansi(false)
+        .with_env_filter(env_filter)
+        .init();
+
     print_banner();
 
     let config_path = args.config.or_else(default_config_path).ok_or_else(|| {
@@ -373,30 +403,51 @@ async fn main() -> io::Result<()> {
     validate(&config)
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, format!("Config error: {}", e)))?;
 
-    println!(
+    tracing::info!(
         "\x1b[35m[Configuration Loaded]\x1b[0m {}",
         config_path.display()
     );
 
     let enabled_count = config.proxies.iter().filter(|p| p.enabled).count();
-    println!(
+    tracing::info!(
         "\x1b[35m[Configuration Processed]\x1b[0m Spawning {} independent pipelines ({} disabled)...",
         enabled_count,
         config.proxies.len() - enabled_count
     );
 
+    let shutdown = wf_proxy::Shutdown {
+        token: CancellationToken::new(),
+        tracker: TaskTracker::new(),
+    };
+
+    {
+        let token = shutdown.token.clone();
+        tokio::spawn(async move {
+            let mut sigterm =
+                tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+                    .expect("failed to install SIGTERM handler");
+            tokio::select! {
+                _ = sigterm.recv() => {}
+                _ = tokio::signal::ctrl_c() => {}
+            }
+            tracing::info!("\x1b[35m[Shutdown]\x1b[0m Draining in-flight connections...");
+            token.cancel();
+        });
+    }
+
     let stats_registry = StatsRegistry::new();
     let buffer_pool = Arc::new(BufferPool::default());
-    let mut tasks = vec![];
+    let mut pipeline_tasks = vec![];
 
     // Iterate through the profiles and kick off a dedicated worker task for each one
     for proxy in config.proxies.into_iter().filter(|p| p.enabled) {
         let output = resolve_output(&proxy, &config.output);
         let stats = stats_registry.get_or_create(&proxy.name);
         let buffer_pool = buffer_pool.clone();
+        let shutdown = shutdown.clone();
 
         let task = tokio::spawn(async move {
-            println!(
+            tracing::info!(
                 "\x1b[32m[Spawning Worker]\x1b[0m Starting engine module: {}",
                 proxy.name
             );
@@ -407,16 +458,18 @@ async fn main() -> io::Result<()> {
                 output,
                 stats,
                 buffer_pool,
+                shutdown,
             )
             .await
             {
-                eprintln!(
+                tracing::error!(
                     "\x1b[31m[Critical Failure]\x1b[0m Engine error on [{}]: {}",
-                    proxy.name, e
+                    proxy.name,
+                    e
                 );
             }
         });
-        tasks.push(task);
+        pipeline_tasks.push(task);
     }
 
     // A live, low-noise view of each pipeline: how many connections it's
@@ -424,15 +477,15 @@ async fn main() -> io::Result<()> {
     // way, and how many have errored (most commonly the target refusing
     // the connection). Set stats_interval_secs = 0 in the config to
     // disable.
-    if config.stats_interval_secs > 0 {
+    let stats_handle = if config.stats_interval_secs > 0 {
         let registry = stats_registry.clone();
         let interval = config.stats_interval_secs;
-        tasks.push(tokio::spawn(async move {
+        Some(tokio::spawn(async move {
             let mut ticker = tokio::time::interval(Duration::from_secs(interval));
             loop {
                 ticker.tick().await;
                 for (name, snap) in registry.snapshot_all() {
-                    println!(
+                    tracing::info!(
                         "\x1b[34m[STATS]\x1b[0m {} — active={} total={} in={}B out={}B errors={}",
                         name,
                         snap.connections_active,
@@ -443,24 +496,58 @@ async fn main() -> io::Result<()> {
                     );
                 }
             }
-        }));
-    }
+        }))
+    } else {
+        None
+    };
 
-    if let Some(path) = config.control_socket {
+    let control_handle = if let Some(path) = config.control_socket {
         let stats = stats_registry.clone();
-        tasks.push(tokio::spawn(async move {
+        Some(tokio::spawn(async move {
             if let Err(e) = control::serve(std::path::Path::new(&path), stats).await {
-                eprintln!(
+                tracing::error!(
                     "\x1b[31m[control]\x1b[0m Failed to serve on {}: {}",
-                    path, e
+                    path,
+                    e
                 );
             }
-        }));
+        }))
+    } else {
+        None
+    };
+
+    // Every pipeline's accept loop returns once `shutdown` is cancelled
+    // (or on a real bind error) -- this only unblocks once all of them
+    // have stopped taking new connections.
+    for task in pipeline_tasks {
+        let _ = task.await;
     }
 
-    // Keep the runtime listening loop alive indefinitely across all routing components
-    for task in tasks {
-        let _ = task.await;
+    // Stop counting new sessions into the tracker, then bound how long
+    // we wait for the ones already in flight -- comfortably under
+    // systemd/wraithflow.service's TimeoutStopSec so systemd's own
+    // SIGKILL never has to be the thing that cuts a session off.
+    shutdown.tracker.close();
+    tokio::select! {
+        () = shutdown.tracker.wait() => {
+            tracing::info!("\x1b[35m[Shutdown]\x1b[0m All sessions drained cleanly");
+        }
+        () = tokio::time::sleep(Duration::from_secs(config.shutdown_drain_secs)) => {
+            tracing::warn!(
+                "\x1b[33m[Shutdown]\x1b[0m Drain timeout ({}s) reached, exiting with sessions still in flight",
+                config.shutdown_drain_secs
+            );
+        }
+    }
+
+    // Neither of these holds client connections needing a graceful
+    // close -- killing them outright is harmless once every pipeline
+    // has already stopped accepting and drained.
+    if let Some(h) = stats_handle {
+        h.abort();
+    }
+    if let Some(h) = control_handle {
+        h.abort();
     }
 
     Ok(())
@@ -522,6 +609,7 @@ mod tests {
             output: vec![],
             stats_interval_secs: 30,
             control_socket: None,
+            shutdown_drain_secs: 8,
         };
         assert!(validate(&config).is_ok());
     }
@@ -536,6 +624,7 @@ mod tests {
             output: vec![],
             stats_interval_secs: 30,
             control_socket: None,
+            shutdown_drain_secs: 8,
         };
         assert!(validate(&config).is_err());
     }
@@ -549,6 +638,7 @@ mod tests {
             output: vec![],
             stats_interval_secs: 30,
             control_socket: None,
+            shutdown_drain_secs: 8,
         };
         assert!(validate(&config).is_ok());
     }
@@ -560,6 +650,7 @@ mod tests {
             output: vec![],
             stats_interval_secs: 30,
             control_socket: None,
+            shutdown_drain_secs: 8,
         };
         assert!(validate(&config).is_err());
     }
@@ -573,6 +664,7 @@ mod tests {
             output: vec![],
             stats_interval_secs: 30,
             control_socket: None,
+            shutdown_drain_secs: 8,
         };
         assert!(validate(&config).is_err());
     }
@@ -584,6 +676,7 @@ mod tests {
             output: vec![profile("p", "not-a-format")],
             stats_interval_secs: 30,
             control_socket: None,
+            shutdown_drain_secs: 8,
         };
         assert!(validate(&config).is_err());
     }
@@ -597,6 +690,7 @@ mod tests {
             output: vec![p],
             stats_interval_secs: 30,
             control_socket: None,
+            shutdown_drain_secs: 8,
         };
         assert!(validate(&config).is_err());
     }
