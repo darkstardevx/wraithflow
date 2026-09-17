@@ -41,22 +41,36 @@ struct Args {
     status: bool,
 }
 
+/// Exactly one of `start`/`stop`/`restart`/`status` must be set. Split out
+/// from `run_admin` so this selection logic is testable without touching
+/// `Command`/process spawning.
+fn resolve_admin_action(
+    start: bool,
+    stop: bool,
+    restart: bool,
+    status: bool,
+) -> Result<&'static str, &'static str> {
+    match (start, stop, restart, status) {
+        (true, false, false, false) => Ok("start"),
+        (false, true, false, false) => Ok("stop"),
+        (false, false, true, false) => Ok("restart"),
+        (false, false, false, true) => Ok("status"),
+        (false, false, false, false) => {
+            Err("--admin needs exactly one of --start, --stop, --restart, --status")
+        }
+        _ => Err("--admin takes exactly one of --start, --stop, --restart, --status, not several at once"),
+    }
+}
+
 /// Runs `systemctl <action> wraithflow`, `sudo`-prefixed for anything that
 /// mutates service state. Inherits this process's stdio, so an interactive
 /// sudo password prompt shows up exactly as if you'd typed the systemctl
 /// command yourself.
 fn run_admin(args: &Args) -> io::Result<i32> {
-    let action = match (args.start, args.stop, args.restart, args.status) {
-        (true, false, false, false) => "start",
-        (false, true, false, false) => "stop",
-        (false, false, true, false) => "restart",
-        (false, false, false, true) => "status",
-        (false, false, false, false) => {
-            eprintln!("--admin needs exactly one of --start, --stop, --restart, --status");
-            return Ok(1);
-        }
-        _ => {
-            eprintln!("--admin takes exactly one of --start, --stop, --restart, --status, not several at once");
+    let action = match resolve_admin_action(args.start, args.stop, args.restart, args.status) {
+        Ok(action) => action,
+        Err(msg) => {
+            eprintln!("{msg}");
             return Ok(1);
         }
     };
@@ -431,4 +445,171 @@ async fn main() -> io::Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn proxy(name: &str, listen: &str, target: &str) -> ProxyConfig {
+        ProxyConfig {
+            name: name.to_string(),
+            listen: listen.to_string(),
+            target: target.to_string(),
+            enabled: true,
+            log_payloads: true,
+            output: None,
+        }
+    }
+
+    fn profile(name: &str, format: &str) -> OutputProfile {
+        OutputProfile {
+            name: name.to_string(),
+            format: format.to_string(),
+            pretty: false,
+            color: false,
+            min_bytes: 0,
+            direction: None,
+            contains: None,
+            redact: vec![],
+            highlight: vec![],
+        }
+    }
+
+    #[test]
+    fn resolve_admin_action_maps_each_single_flag() {
+        assert_eq!(resolve_admin_action(true, false, false, false), Ok("start"));
+        assert_eq!(resolve_admin_action(false, true, false, false), Ok("stop"));
+        assert_eq!(
+            resolve_admin_action(false, false, true, false),
+            Ok("restart")
+        );
+        assert_eq!(
+            resolve_admin_action(false, false, false, true),
+            Ok("status")
+        );
+    }
+
+    #[test]
+    fn resolve_admin_action_rejects_no_flags_and_multiple_flags() {
+        assert!(resolve_admin_action(false, false, false, false).is_err());
+        assert!(resolve_admin_action(true, true, false, false).is_err());
+    }
+
+    #[test]
+    fn validate_accepts_a_normal_config() {
+        let config = AppConfig {
+            proxies: vec![proxy("a", "127.0.0.1:1000", "127.0.0.1:2000")],
+            output: vec![],
+            stats_interval_secs: 30,
+        };
+        assert!(validate(&config).is_ok());
+    }
+
+    #[test]
+    fn validate_rejects_duplicate_listen_ports_among_enabled_proxies() {
+        let config = AppConfig {
+            proxies: vec![
+                proxy("a", "127.0.0.1:1000", "127.0.0.1:2000"),
+                proxy("b", "127.0.0.1:1000", "127.0.0.1:3000"),
+            ],
+            output: vec![],
+            stats_interval_secs: 30,
+        };
+        assert!(validate(&config).is_err());
+    }
+
+    #[test]
+    fn validate_ignores_a_disabled_proxy_sharing_a_port() {
+        let mut disabled = proxy("b", "127.0.0.1:1000", "127.0.0.1:3000");
+        disabled.enabled = false;
+        let config = AppConfig {
+            proxies: vec![proxy("a", "127.0.0.1:1000", "127.0.0.1:2000"), disabled],
+            output: vec![],
+            stats_interval_secs: 30,
+        };
+        assert!(validate(&config).is_ok());
+    }
+
+    #[test]
+    fn validate_rejects_an_invalid_listen_address() {
+        let config = AppConfig {
+            proxies: vec![proxy("a", "not-an-address", "127.0.0.1:2000")],
+            output: vec![],
+            stats_interval_secs: 30,
+        };
+        assert!(validate(&config).is_err());
+    }
+
+    #[test]
+    fn validate_rejects_a_dangling_output_reference() {
+        let mut p = proxy("a", "127.0.0.1:1000", "127.0.0.1:2000");
+        p.output = Some("missing".to_string());
+        let config = AppConfig {
+            proxies: vec![p],
+            output: vec![],
+            stats_interval_secs: 30,
+        };
+        assert!(validate(&config).is_err());
+    }
+
+    #[test]
+    fn validate_rejects_an_unknown_output_format() {
+        let config = AppConfig {
+            proxies: vec![],
+            output: vec![profile("p", "not-a-format")],
+            stats_interval_secs: 30,
+        };
+        assert!(validate(&config).is_err());
+    }
+
+    #[test]
+    fn validate_rejects_an_unknown_direction() {
+        let mut p = profile("p", "json");
+        p.direction = Some("sideways".to_string());
+        let config = AppConfig {
+            proxies: vec![],
+            output: vec![p],
+            stats_interval_secs: 30,
+        };
+        assert!(validate(&config).is_err());
+    }
+
+    #[test]
+    fn resolve_output_with_no_profile_uses_log_payloads_and_defaults() {
+        let mut p = proxy("a", "127.0.0.1:1000", "127.0.0.1:2000");
+        p.log_payloads = false;
+        let output = resolve_output(&p, &[]);
+        assert!(!output.enabled);
+        assert_eq!(output.format, OutputFormat::Hexdump);
+    }
+
+    #[test]
+    fn resolve_output_maps_a_named_profiles_fields() {
+        let mut p = proxy("a", "127.0.0.1:1000", "127.0.0.1:2000");
+        p.output = Some("prof".to_string());
+        let mut prof = profile("prof", "json");
+        prof.pretty = true;
+        prof.min_bytes = 10;
+        prof.direction = Some("outbound".to_string());
+        prof.contains = Some("GET".to_string());
+
+        let output = resolve_output(&p, &[prof]);
+        assert_eq!(output.format, OutputFormat::Json);
+        assert!(output.pretty);
+        assert_eq!(output.filter.min_bytes, 10);
+        assert_eq!(output.filter.direction, Some(Direction::Outbound));
+        assert_eq!(output.filter.contains, Some(b"GET".to_vec()));
+    }
+
+    #[test]
+    fn resolve_output_falls_back_to_both_directions_on_an_unknown_string() {
+        let mut p = proxy("a", "127.0.0.1:1000", "127.0.0.1:2000");
+        p.output = Some("prof".to_string());
+        let mut prof = profile("prof", "json");
+        prof.direction = Some("sideways".to_string());
+
+        let output = resolve_output(&p, &[prof]);
+        assert_eq!(output.filter.direction, None);
+    }
 }
