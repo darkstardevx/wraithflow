@@ -137,12 +137,28 @@ wf-tui --socket /run/wraithflow/control.sock --interval 1
 ```
 
 A table of every pipeline (active/total connections, bytes each way,
-errors), refreshed every `--interval` seconds by reconnecting to the
-socket, colored via the shared `cybercore` CYBERGRID palette the same
+errors, an inline history sparkline), refreshed every `--interval`
+seconds, colored via the shared `cybercore` CYBERGRID palette the same
 way `wf-packet`'s own output formats are (green = actively carrying
-traffic, red = `errors_total > 0`, muted = idle and error-free).
-`q`/`Esc` to quit. Requires `control_socket` to be set in
-`config.toml` first — it has nothing to connect to otherwise.
+traffic, red = `errors_total > 0`, muted = idle and error-free). An
+aggregate `TOTAL` line summarizes every pipeline at a glance. Requires
+`control_socket` to be set in `config.toml` first — it has nothing to
+connect to otherwise.
+
+| key | does |
+|---|---|
+| `q` / `Esc` | quit |
+| `↑`/`k`, `↓`/`j` | move selection |
+| `s` | cycle sort field |
+| `r` | reverse sort direction |
+| `p` | pause/resume auto-refresh |
+| `Enter` | open a detail popup (raw numbers + a full-resolution history graph) for the selected pipeline |
+| `?` | toggle a help popup |
+
+`--once` fetches a single snapshot, prints a plain table to stdout,
+and exits — no terminal/raw-mode setup at all, so it works without a
+real controlling TTY too (script/cron-friendly). `--no-color` disables
+`cybercore` styling in both modes.
 
 **Reading it as someone newer to networking:** `listen` is the address
 *clients connect to* — it's WraithFlow pretending to be the real service.
