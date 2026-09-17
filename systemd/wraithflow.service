@@ -1,0 +1,50 @@
+[Unit]
+Description=WraithFlow — stealth traffic proxy & analyzer (config-driven pipelines)
+Documentation=https://github.com/darkstardevx/wraithflow
+After=network.target
+
+[Service]
+Type=simple
+User=raven
+Group=raven
+WorkingDirectory=/home/raven/tools/daemons/wraithflow
+ExecStart=/home/raven/.cargo-target/release/wraithflow --config /home/raven/.config/wraithflow/config.toml
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=10
+
+# Sandboxing. Real runtime footprint: binds the TCP ports named in
+# config.toml, connects onward to each pipeline's target, reads that
+# one config file under $HOME, and logs to stdout (journald) --
+# nothing else. Unlike ApexDaemon (which spawns arbitrary
+# user-configured shell commands and needed a much narrower,
+# carefully-bounded set of directives after a live conflict with this
+# host's setuid-firejail ssh wrapper broke most of them), WraithFlow's
+# own running unit never shells out to anything at all -- `--admin`'s
+# `sudo systemctl` call is a separate CLI code path invoked by a human
+# at a terminal, never by this unit's own ExecStart -- so that
+# conflict doesn't apply here by construction. Verified live before
+# being considered done, not assumed just because the reasoning above
+# holds.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectClock=true
+ProtectControlGroups=true
+LockPersonality=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+MemoryDenyWriteExecute=true
+# Plain TCP listen/connect only -- no AF_UNIX (no D-Bus/notify calls,
+# unlike ApexDaemon), no AF_NETLINK (no nft/netlink calls, unlike
+# ghostport-firewall).
+RestrictAddressFamilies=AF_INET AF_INET6
+# No pipeline in config.toml binds a privileged (<1024) port.
+CapabilityBoundingSet=
+
+[Install]
+WantedBy=multi-user.target

@@ -130,9 +130,16 @@ cargo build --release
 
 ### As a service
 
-A `wraithflow.service` unit (not tracked here — lives in `/etc/systemd/system/`)
-runs the release binary against `~/.config/wraithflow/config.toml`,
-`Restart=on-failure`, enabled at boot.
+`systemd/wraithflow.service` runs the release binary against
+`~/.config/wraithflow/config.toml`, `Restart=on-failure`, enabled at boot,
+with a real systemd sandboxing profile (see [SECURITY.md](SECURITY.md)).
+Install it with:
+
+```bash
+sudo cp systemd/wraithflow.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now wraithflow
+```
 
 ```bash
 systemctl status wraithflow
