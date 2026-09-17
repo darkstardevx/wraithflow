@@ -29,20 +29,31 @@ RuntimeDirectoryMode=0700
 # Sandboxing. Real runtime footprint: binds the TCP ports named in
 # config.toml, connects onward to each pipeline's target, reads that
 # one config file under $HOME, optionally serves live stats over the
-# Unix control socket above, and logs to stdout (journald) -- nothing
-# else. Unlike ApexDaemon (which spawns arbitrary
-# user-configured shell commands and needed a much narrower,
-# carefully-bounded set of directives after a live conflict with this
-# host's setuid-firejail ssh wrapper broke most of them), WraithFlow's
-# own running unit never shells out to anything at all -- `--admin`'s
-# `sudo systemctl` call is a separate CLI code path invoked by a human
-# at a terminal, never by this unit's own ExecStart -- so that
-# conflict doesn't apply here by construction. Verified live before
-# being considered done, not assumed just because the reasoning above
-# holds.
+# Unix control socket above, logs to stdout (journald), and -- if
+# `capture_log` is set in config.toml -- appends to one JSONL file
+# under $HOME too (see ReadWritePaths below). Unlike ApexDaemon (which
+# spawns arbitrary user-configured shell commands and needed a much
+# narrower, carefully-bounded set of directives after a live conflict
+# with this host's setuid-firejail ssh wrapper broke most of them),
+# WraithFlow's own running unit never shells out to anything at all --
+# `--admin`'s `sudo systemctl` call is a separate CLI code path invoked
+# by a human at a terminal, never by this unit's own ExecStart -- so
+# that conflict doesn't apply here by construction. Verified live
+# before being considered done, not assumed just because the
+# reasoning above holds.
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=read-only
+# `capture_log`'s target directory (~/.local/state/wraithflow) --
+# ProtectHome=read-only above blocks it otherwise. Confirmed live: the
+# first deploy after adding capture_log support failed with exactly
+# this -- "[Capture Log] could not open .../captures.jsonl: Read-only
+# file system (os error 30)". Same lesson as Argus's own unit: the
+# target must already exist before this unit starts (ReadWritePaths
+# doesn't auto-create it) -- run once, unprivileged, under your own
+# home, before enabling capture_log:
+#     mkdir -p /home/raven/.local/state/wraithflow
+ReadWritePaths=/home/raven/.local/state/wraithflow
 PrivateTmp=true
 ProtectKernelTunables=true
 ProtectKernelModules=true

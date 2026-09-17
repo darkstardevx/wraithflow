@@ -99,6 +99,43 @@ spliced-in color code would break).
 > credentials, tokens, or other sensitive data — `secure-db-relay` above
 > ships muted by default for exactly this reason.
 
+## 🔍 Browsing captured traffic (Echo)
+
+stdout/journalctl is fine for tailing, but not for actually browsing —
+searching, filtering, or looking at one specific exchange. Set `capture_log`
+at the top level of config.toml to also write every logged packet to a
+shared JSONL file, one line per packet across every pipeline:
+
+```toml
+capture_log = "~/.local/state/wraithflow/captures.jsonl"   # omit to disable — default
+```
+
+[Echo](https://github.com/darkstardevx/echo) (`wf-echo`) tails this file —
+a real flow list you can filter/search/inspect, not just watch scroll past.
+Same redaction already applied, same filters already decided what gets
+logged at all — this is an additional sink for the exact same content, not
+a second logging decision.
+
+> [!WARNING]
+> This is the same sensitive-data consideration as the `log_payloads`
+> warning above, just persisted to a file instead of the journal — a
+> pipeline you've deliberately muted or redacted for secrets stays that way
+> in the capture log too (nothing bypasses `redact`), but don't assume a
+> file you haven't looked at is safe just because it's not stdout.
+
+**One-time setup if you enable this**: the target directory must exist
+*before* wraithflow starts — `ReadWritePaths` in the systemd unit doesn't
+auto-create it, and `ProtectHome=read-only` blocks the write otherwise
+(confirmed live: `[Capture Log] could not open .../captures.jsonl:
+Read-only file system`).
+
+```bash
+mkdir -p ~/.local/state/wraithflow   # unprivileged, under your own home
+sudo cp systemd/wraithflow.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl restart wraithflow
+```
+
 ## 📊 Monitoring a pipeline
 
 Every pipeline tracks, live, in `wf-core::PipelineStats`:
