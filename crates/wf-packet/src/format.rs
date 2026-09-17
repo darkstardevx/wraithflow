@@ -244,3 +244,111 @@ fn render_json(packet: &Packet, pretty: bool, color: bool) -> String {
         value.to_string()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use wf_core::Direction;
+
+    #[test]
+    fn parse_recognizes_every_alias_case_insensitively() {
+        assert_eq!(OutputFormat::parse("HEX"), Some(OutputFormat::Hexdump));
+        assert_eq!(OutputFormat::parse("hexdump"), Some(OutputFormat::Hexdump));
+        assert_eq!(OutputFormat::parse("Json"), Some(OutputFormat::Json));
+        assert_eq!(OutputFormat::parse("text"), Some(OutputFormat::Raw));
+        assert_eq!(OutputFormat::parse("raw"), Some(OutputFormat::Raw));
+        assert_eq!(OutputFormat::parse("BASE64"), Some(OutputFormat::Base64));
+        assert_eq!(OutputFormat::parse("summary"), Some(OutputFormat::Compact));
+        assert_eq!(OutputFormat::parse("compact"), Some(OutputFormat::Compact));
+        assert_eq!(OutputFormat::parse("bogus"), None);
+    }
+
+    #[test]
+    fn apply_highlight_is_a_noop_with_no_patterns() {
+        let bytes = b"hello world".to_vec();
+        assert_eq!(apply_highlight(&bytes, &[]), bytes);
+    }
+
+    #[test]
+    fn apply_highlight_wraps_every_match_and_leaves_the_rest_untouched() {
+        let out = apply_highlight(b"the secret word", &[b"secret".to_vec()]);
+        let text = String::from_utf8(out).unwrap();
+        let color = cybercore::palette::red();
+        let reset = cybercore::palette::RESET;
+        assert_eq!(text, format!("the {color}secret{reset} word"));
+    }
+
+    #[test]
+    fn apply_highlight_leftmost_pattern_wins_on_overlap() {
+        // Both patterns match starting at the same byte -- "ab" (listed
+        // first) should win over "abc".
+        let out = apply_highlight(b"abcdef", &[b"ab".to_vec(), b"abc".to_vec()]);
+        let text = String::from_utf8(out).unwrap();
+        let color = cybercore::palette::red();
+        let reset = cybercore::palette::RESET;
+        assert_eq!(text, format!("{color}ab{reset}cdef"));
+    }
+
+    #[test]
+    fn render_compact_truncates_long_text_with_an_ellipsis() {
+        let packet = Packet::new("p", Direction::Outbound, &[b'x'; 100]);
+        let out = render_compact(&packet, false, &[]);
+        assert!(out.contains('…'));
+        assert!(out.contains(&"x".repeat(COMPACT_PREVIEW_LEN)));
+        assert!(!out.contains(&"x".repeat(COMPACT_PREVIEW_LEN + 1)));
+    }
+
+    #[test]
+    fn render_compact_replaces_control_characters_with_a_dot() {
+        let packet = Packet::new("p", Direction::Inbound, b"a\nb\tc");
+        let out = render_compact(&packet, false, &[]);
+        assert_eq!(out, "[INBOUND] 5B \"a.b.c\"");
+    }
+
+    #[test]
+    fn render_compact_leaves_short_text_unchanged() {
+        let packet = Packet::new("p", Direction::Outbound, b"hi");
+        let out = render_compact(&packet, false, &[]);
+        assert_eq!(out, "[OUTBOUND] 2B \"hi\"");
+    }
+
+    #[test]
+    fn render_raw_without_color_is_the_direction_tag_plus_lossy_utf8() {
+        let packet = Packet::new("p", Direction::Outbound, b"GET / HTTP/1.1");
+        assert_eq!(render_raw(&packet, false, &[]), "[OUTBOUND] GET / HTTP/1.1");
+    }
+
+    #[test]
+    fn render_base64_without_color_encodes_the_raw_bytes() {
+        let packet = Packet::new("p", Direction::Inbound, b"hi");
+        assert_eq!(render_base64(&packet, false), "[INBOUND] aGk=");
+    }
+
+    #[test]
+    fn render_json_compact_without_color_or_pretty_is_a_single_line_object() {
+        let packet = Packet::new("pipeline-a", Direction::Outbound, b"hi");
+        let out = render_json(&packet, false, false);
+        assert!(out.starts_with('{') && out.ends_with('}'));
+        assert!(out.contains("\"pipeline\":\"pipeline-a\""));
+        assert!(out.contains("\"direction\":\"OUTBOUND\""));
+        assert!(out.contains("\"length\":2"));
+        assert!(out.contains("\"hex\":\"6869\""));
+        assert!(!out.contains('\n'));
+    }
+
+    #[test]
+    fn render_json_pretty_without_color_is_multi_line() {
+        let packet = Packet::new("p", Direction::Outbound, b"hi");
+        let out = render_json(&packet, true, false);
+        assert!(out.contains('\n'));
+    }
+
+    #[test]
+    fn render_hexdump_without_color_shows_hex_and_ascii_columns() {
+        let packet = Packet::new("p", Direction::Outbound, b"hi");
+        let out = render_hexdump(&packet, false);
+        assert!(out.contains("[OUTBOUND Payload - 2 bytes]"));
+        assert!(out.contains("68 69"));
+        assert!(out.contains("| hi"));
+    }
+}

@@ -51,3 +51,38 @@ impl Default for BufferPool {
         Self::new(4096, 64)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn acquire_on_an_empty_pool_allocates_fresh_with_the_configured_capacity() {
+        let pool = BufferPool::new(128, 4);
+        let buf = pool.acquire();
+        assert!(buf.is_empty());
+        assert!(buf.capacity() >= 128);
+    }
+
+    #[test]
+    fn release_then_acquire_reuses_the_same_buffer() {
+        let pool = BufferPool::new(64, 4);
+        let buf = pool.acquire();
+        let ptr = buf.as_ptr();
+        pool.release(buf);
+
+        let reused = pool.acquire();
+        assert_eq!(reused.as_ptr(), ptr);
+        assert!(reused.is_empty());
+    }
+
+    #[test]
+    fn release_beyond_max_idle_drops_the_extra_instead_of_growing_the_pool() {
+        let pool = BufferPool::new(16, 2);
+        pool.release(vec![1]);
+        pool.release(vec![2]);
+        pool.release(vec![3]); // pool already has max_idle=2 parked, this one is dropped
+
+        assert_eq!(pool.free.lock().unwrap().len(), 2);
+    }
+}

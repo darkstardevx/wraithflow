@@ -61,3 +61,51 @@ impl StatsRegistry {
         out
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::Ordering;
+
+    #[test]
+    fn get_or_create_returns_the_same_instance_for_a_repeated_name() {
+        let registry = StatsRegistry::new();
+        let a = registry.get_or_create("pipeline-a");
+        a.bytes_in.fetch_add(42, Ordering::Relaxed);
+
+        let b = registry.get_or_create("pipeline-a");
+        assert_eq!(b.bytes_in.load(Ordering::Relaxed), 42);
+    }
+
+    #[test]
+    fn snapshot_reflects_live_counters() {
+        let stats = PipelineStats::default();
+        stats.bytes_in.fetch_add(10, Ordering::Relaxed);
+        stats.bytes_out.fetch_add(20, Ordering::Relaxed);
+        stats.connections_total.fetch_add(1, Ordering::Relaxed);
+        stats.connections_active.fetch_add(1, Ordering::Relaxed);
+        stats.errors_total.fetch_add(2, Ordering::Relaxed);
+
+        let snap = stats.snapshot();
+        assert_eq!(snap.bytes_in, 10);
+        assert_eq!(snap.bytes_out, 20);
+        assert_eq!(snap.connections_total, 1);
+        assert_eq!(snap.connections_active, 1);
+        assert_eq!(snap.errors_total, 2);
+    }
+
+    #[test]
+    fn snapshot_all_is_sorted_by_pipeline_name() {
+        let registry = StatsRegistry::new();
+        registry.get_or_create("zeta");
+        registry.get_or_create("alpha");
+        registry.get_or_create("mid");
+
+        let names: Vec<_> = registry
+            .snapshot_all()
+            .into_iter()
+            .map(|(name, _)| name)
+            .collect();
+        assert_eq!(names, vec!["alpha", "mid", "zeta"]);
+    }
+}
