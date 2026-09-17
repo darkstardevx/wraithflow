@@ -150,7 +150,18 @@ fn draw_table(
 
     let table = Table::new(rows, widths)
         .header(header)
-        .row_highlight_style(Style::new().bg(palette.muted).add_modifier(Modifier::BOLD))
+        // Both fg and bg set explicitly: a highlight style that only
+        // sets bg leaves fg to fall through from the row's own
+        // health-based color, and a muted (idle) row's fg matches a
+        // muted highlight bg exactly -- invisible selected text,
+        // confirmed live. Setting both guarantees contrast regardless
+        // of which row is selected.
+        .row_highlight_style(
+            Style::new()
+                .bg(palette.accent)
+                .fg(palette.text)
+                .add_modifier(Modifier::BOLD),
+        )
         .highlight_symbol("▶ ")
         .block(
             Block::default()
