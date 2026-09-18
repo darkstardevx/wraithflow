@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" role="img" aria-label="WraithFlow dark Halloween website hero">
+  <defs>
+    <radialGradient id="sky" cx="62%" cy="43%" r="70%"><stop stop-color="#281337"/><stop offset=".55" stop-color="#120a18"/><stop offset="1" stop-color="#07050a"/></radialGradient>
+    <linearGradient id="orange" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#ffb347"/><stop offset=".45" stop-color="#ff6a00"/><stop offset="1" stop-color="#ff3100"/></linearGradient>
+    <filter id="glow"><feGaussianBlur stdDeviation="8" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <rect width="1600" height="900" fill="url(#sky)"/>
+  <g opacity=".18" stroke="#8d57a4" stroke-width="1"><path d="M0 130h1600M0 260h1600M0 390h1600M0 520h1600M0 650h1600M0 780h1600"/><path d="M180 0v900M400 0v900M620 0v900M840 0v900M1060 0v900M1280 0v900M1500 0v900"/></g>
+  <circle cx="1240" cy="270" r="178" fill="#ff6a00" opacity=".08"/><circle cx="1240" cy="270" r="126" fill="#ff9d2e" opacity=".08"/>
+  <path d="M1034 204c-158 0-273 126-273 281 0 99 47 193 122 248l-22 79 77-39c29-15 67-15 96 0l77 39-22-79c75-55 122-149 122-248 0-155-115-281-273-281Z" fill="#6c2bd9" opacity=".86"/>
+  <path d="M1034 321c-106 0-172 75-172 172 0 91 57 160 172 207 115-47 172-116 172-207 0-97-66-172-172-172Z" fill="#09060d"/>
+  <circle cx="974" cy="498" r="13" fill="#b7ff3c" filter="url(#glow)"/><circle cx="1094" cy="498" r="13" fill="#b7ff3c" filter="url(#glow)"/>
+  <g fill="none" stroke="url(#orange)" stroke-linecap="round" filter="url(#glow)">
+    <path d="M97 689h273c75 0 85-106 164-106h129c78 0 91 106 168 106h672" stroke-width="13"/>
+    <path d="M97 748h196c82 0 101-68 174-68h83c75 0 91 68 168 68h785" stroke-width="6" opacity=".7"/>
+  </g>
+  <g fill="#ff6a00"><circle cx="97" cy="689" r="11"/><circle cx="370" cy="689" r="8"/><circle cx="663" cy="583" r="8"/><circle cx="831" cy="689" r="8"/><circle cx="1503" cy="689" r="11"/></g>
+  <text x="120" y="228" fill="#f2ebe3" font-size="112" font-family="Inter,Segoe UI,Arial,sans-serif" font-weight="900" letter-spacing="2">WRAITH<tspan fill="#ff6a00">FLOW</tspan></text>
+  <text x="126" y="286" fill="#bfa9ca" font-size="27" font-family="ui-monospace,SFMono-Regular,Consolas,monospace" letter-spacing="7">STEALTH TRAFFIC NETWORK PROXY &amp; ANALYZER</text>
+  <text x="126" y="370" fill="#e8dfd5" font-size="35" font-family="Inter,Segoe UI,Arial,sans-serif" font-weight="650">Forward everything. Expose only what matters.</text>
+  <text x="126" y="421" fill="#9d8aaa" font-size="25" font-family="Inter,Segoe UI,Arial,sans-serif">Config-driven TCP pipelines · packet formatting · redaction · live stats · TUI</text>
+  <g transform="translate(126 493)" font-family="ui-monospace,SFMono-Regular,Consolas,monospace" font-size="21">
+    <rect width="630" height="112" rx="16" fill="#0a0710" stroke="#3a2149"/>
+    <circle cx="28" cy="28" r="6" fill="#ff6a00"/><circle cx="48" cy="28" r="6" fill="#7a2eff"/><circle cx="68" cy="28" r="6" fill="#b7ff3c"/>
+    <text x="24" y="68" fill="#b7ff3c">[FLOW]</text><text x="108" y="68" fill="#d9d1ca">127.0.0.1:45634</text><text x="318" y="68" fill="#ff6a00">→</text><text x="352" y="68" fill="#d9d1ca">127.0.0.1:9000</text>
+    <text x="24" y="96" fill="#7d6e87">connections 12  ·  bytes 3.8 MiB  ·  errors 0</text>
+  </g>
+</svg>

@@ -1,4 +1,6 @@
-# 👻 WraithFlow
+<p align="center">
+  <img src="assets/wraithflow-logo-horizontal.svg" width="560" alt="WraithFlow — Stealth Traffic Network Proxy &amp; Analyzer">
+</p>
 
 `Rust` · `Tokio` · `TCP Proxy` · `systemd`
 
@@ -233,6 +235,24 @@ longer hard-resets every open connection instantly. Keep
 `shutdown_drain_secs` comfortably under `systemd/wraithflow.service`'s
 `TimeoutStopSec` (currently 10), or systemd's own SIGKILL cuts the drain
 short before WraithFlow's own timeout gets a chance to.
+
+## 📥 Install
+
+Prebuilt binaries (Linux x86_64/aarch64, macOS x86_64/aarch64) from the
+[latest release](https://github.com/darkstardevx/wraithflow/releases/latest):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/darkstardevx/wraithflow/main/install.sh | sh
+```
+
+Installs `wraithflow` and `wf-tui` to `~/.local/bin` (override with
+`WRAITHFLOW_INSTALL_DIR`), verifying each download's sha256 against the
+checksum published alongside it. No release for your platform yet, or
+you'd rather build from source:
+
+```bash
+cargo install --git https://github.com/darkstardevx/wraithflow wraithflow
+```
 
 ## ▶️ Running
 

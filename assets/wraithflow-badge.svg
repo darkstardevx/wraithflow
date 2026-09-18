@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640">
+  <defs><radialGradient id="bg"><stop stop-color="#251132"/><stop offset="1" stop-color="#09060d"/></radialGradient></defs>
+  <circle cx="320" cy="320" r="302" fill="url(#bg)" stroke="#ff6a00" stroke-width="10"/>
+  <circle cx="320" cy="320" r="270" fill="none" stroke="#4a205e" stroke-width="3" stroke-dasharray="8 14"/>
+  <text x="320" y="82" text-anchor="middle" fill="#ff9a2e" font-size="34" font-family="ui-monospace,monospace" font-weight="700" letter-spacing="8">WRAITHFLOW</text>
+  <text x="320" y="586" text-anchor="middle" fill="#a78cb8" font-size="22" font-family="ui-monospace,monospace" letter-spacing="5">STEALTH TRAFFIC NETWORK</text>
+  <path d="M320 142c-95 0-165 77-165 174 0 61 29 119 75 153l-13 48 46-24c17-9 40-9 57 0l46 24-13-48c46-34 75-92 75-153 0-97-70-174-165-174Z" fill="#6e27b8"/>
+  <path d="M320 215c-64 0-104 45-104 105 0 55 35 97 104 126 69-29 104-71 104-126 0-60-40-105-104-105Z" fill="#09060d"/>
+  <circle cx="282" cy="322" r="10" fill="#b7ff3c"/><circle cx="358" cy="322" r="10" fill="#b7ff3c"/>
+  <path d="M110 422h118c35 0 39-52 78-52h29c39 0 43 52 78 52h117" fill="none" stroke="#ff6a00" stroke-width="13" stroke-linecap="round"/>
+  <circle cx="110" cy="422" r="10" fill="#ff6a00"/><circle cx="530" cy="422" r="10" fill="#ff6a00"/>
+</svg>

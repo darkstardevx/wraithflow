@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="t d">
+  <title id="t">WraithFlow app icon</title><desc id="d">A hooded spectral wraith wrapped around orange network flow lines.</desc>
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="38%" r="75%"><stop offset="0" stop-color="#22102f"/><stop offset="1" stop-color="#09060d"/></radialGradient>
+    <linearGradient id="hood" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#8f48ff"/><stop offset="1" stop-color="#46117a"/></linearGradient>
+    <linearGradient id="ember" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#ffb347"/><stop offset=".5" stop-color="#ff6a00"/><stop offset="1" stop-color="#ff3d00"/></linearGradient>
+    <filter id="glow"><feGaussianBlur stdDeviation="6" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <rect width="512" height="512" rx="108" fill="url(#bg)"/>
+  <circle cx="256" cy="256" r="185" fill="none" stroke="#2d1739" stroke-width="2"/>
+  <path d="M256 92c-78 0-139 69-139 152 0 61 27 117 68 153 13 12 17 24 13 39l-9 35 38-20c17-9 39-9 57 0l39 20-9-35c-4-15 0-27 13-39 41-36 68-92 68-153 0-83-61-152-139-152Z" fill="url(#hood)" opacity=".94"/>
+  <path d="M256 147c-59 0-97 45-97 104 0 55 32 98 97 126 65-28 97-71 97-126 0-59-38-104-97-104Z" fill="#0b0710"/>
+  <path d="M207 239c14-22 31-33 49-33s35 11 49 33c-16-7-33-10-49-10s-33 3-49 10Z" fill="#e9e0d6" opacity=".88"/>
+  <circle cx="223" cy="259" r="8" fill="#b7ff3c" filter="url(#glow)"/><circle cx="289" cy="259" r="8" fill="#b7ff3c" filter="url(#glow)"/>
+  <g fill="none" stroke="url(#ember)" stroke-linecap="round" stroke-width="11" filter="url(#glow)">
+    <path d="M60 355h104c30 0 34-42 65-42h55c31 0 36 42 66 42h102"/>
+    <path d="M95 393h76c30 0 39-29 64-29h43c25 0 34 29 64 29h75" opacity=".8"/>
+  </g>
+  <g fill="#ff8a1c"><circle cx="60" cy="355" r="10"/><circle cx="452" cy="355" r="10"/><circle cx="95" cy="393" r="8"/><circle cx="417" cy="393" r="8"/></g>
+  <path d="M171 110 146 65l48 22M341 110l25-45-48 22" fill="none" stroke="#ff6a00" stroke-width="8" stroke-linecap="round" opacity=".75"/>
+</svg>

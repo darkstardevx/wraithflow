@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 360" role="img" aria-label="WraithFlow horizontal logo">
+  <defs>
+    <linearGradient id="w" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#9b56ff"/><stop offset="1" stop-color="#5d1ca7"/></linearGradient>
+    <linearGradient id="o"><stop stop-color="#ffb347"/><stop offset=".5" stop-color="#ff6a00"/><stop offset="1" stop-color="#ff3d00"/></linearGradient>
+    <filter id="g"><feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <rect width="1400" height="360" rx="44" fill="#09060d"/>
+  <g transform="translate(72 40)">
+    <path d="M140 10C68 10 14 73 14 150c0 55 25 105 61 137 11 10 15 21 11 34l-7 29 33-17c16-8 39-8 55 0l33 17-7-29c-4-13 0-24 11-34 36-32 61-82 61-137C266 73 212 10 140 10Z" fill="url(#w)"/>
+    <path d="M140 61c-52 0-84 39-84 91 0 47 28 84 84 108 56-24 84-61 84-108 0-52-32-91-84-91Z" fill="#0b0710"/>
+    <circle cx="111" cy="154" r="7" fill="#b7ff3c"/><circle cx="169" cy="154" r="7" fill="#b7ff3c"/>
+    <path d="M17 238h80c24 0 28-34 51-34h48c23 0 28 34 51 34h74" fill="none" stroke="url(#o)" stroke-width="10" stroke-linecap="round" filter="url(#g)"/>
+  </g>
+  <g transform="translate(420 103)">
+    <text x="0" y="92" fill="#f0e8de" font-size="104" font-family="Inter,Segoe UI,Arial,sans-serif" font-weight="800" letter-spacing="2">WRAITH</text>
+    <text x="460" y="92" fill="#ff6a00" font-size="104" font-family="Inter,Segoe UI,Arial,sans-serif" font-weight="800" letter-spacing="2">FLOW</text>
+    <text x="6" y="145" fill="#a78cb8" font-size="26" font-family="ui-monospace,SFMono-Regular,Consolas,monospace" letter-spacing="7">STEALTH TRAFFIC // VISIBLE FLOW</text>
+    <line x1="4" y1="170" x2="760" y2="170" stroke="#2e173a" stroke-width="2"/>
+    <circle cx="6" cy="204" r="7" fill="#b7ff3c"/><text x="28" y="213" fill="#d8d0c7" font-size="23" font-family="ui-monospace,SFMono-Regular,Consolas,monospace">RUST · TOKIO · TCP PROXY · LIVE TELEMETRY</text>
+  </g>
+</svg>
