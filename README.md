@@ -114,6 +114,7 @@ capture_log = "~/.local/state/wraithflow/captures.jsonl"   # omit to disable —
 
 [Echo](https://github.com/darkstardevx/echo) (`wf-echo`) tails this file —
 a real flow list you can filter/search/inspect, not just watch scroll past.
+See [Echo's site](https://darkstardevx.github.io/echo/) for install/usage.
 Same redaction already applied, same filters already decided what gets
 logged at all — this is an additional sink for the exact same content, not
 a second logging decision.
