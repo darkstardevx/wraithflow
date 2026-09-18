@@ -34,7 +34,45 @@ main { max-width: 1000px; margin: 0 auto; padding: 0 1.5rem 5rem; }
 .hero-wrap { margin-bottom: 1rem; }
 .hero-wrap img { width: 100%; height: auto; display: block; }
 
-.cta-row { display: flex; flex-wrap: wrap; gap: 0.7rem; justify-content: center; margin: -2rem 0 5rem; position: relative; z-index: 2; }
+.cta-row { display: flex; flex-wrap: wrap; gap: 0.7rem; justify-content: center; margin: -2rem 0 2.5rem; position: relative; z-index: 2; }
+
+.installer {
+  max-width: 640px; margin: 0 auto 5rem; background: var(--panel); border: 1px solid var(--line);
+  border-radius: 12px; padding: 1.1rem 1.3rem; position: relative; z-index: 2;
+}
+.os-tabs { display: flex; gap: 0.5rem; margin-bottom: 0.9rem; }
+.os-tab {
+  font-family: var(--mono); font-size: 0.8rem; font-weight: 600; padding: 0.4rem 0.9rem;
+  border-radius: 7px; border: 1px solid var(--line); background: transparent; color: var(--muted);
+  cursor: pointer;
+}
+.os-tab.active { border-color: var(--acid); color: var(--acid); }
+.os-tab:hover:not(.active) { border-color: var(--muted); color: var(--text); }
+.install-row { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+.install-label { font-family: var(--mono); font-size: 0.8rem; font-weight: 700; color: var(--text); white-space: nowrap; }
+.install-code-box {
+  flex: 1 1 280px; display: flex; align-items: center; gap: 0.6rem; background: var(--void);
+  border: 1px solid var(--line); border-radius: 8px; padding: 0.5rem 0.5rem 0.5rem 0.85rem; min-width: 0;
+}
+.install-code-box code {
+  font-family: var(--mono); font-size: 0.8rem; color: var(--acid); white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0;
+}
+.copy-btn {
+  flex-shrink: 0; width: 30px; height: 30px; border-radius: 6px; border: 1px solid var(--line);
+  background: var(--panel2, var(--panel)); color: var(--muted); cursor: pointer; display: flex;
+  align-items: center; justify-content: center; font-size: 0.85rem;
+}
+.copy-btn:hover { border-color: var(--acid); color: var(--acid); }
+.copy-btn.copied { border-color: var(--acid); color: var(--acid); }
+.more-link {
+  font-family: var(--mono); font-size: 0.78rem; color: var(--ember-lt); text-decoration: underline;
+  white-space: nowrap; flex-shrink: 0;
+}
+.more-link:hover { color: var(--ember); }
+@media (max-width: 480px) {
+  .install-label { width: 100%; }
+}
 .btn {
   font-family: var(--mono); font-size: 0.82rem; font-weight: 600; padding: 0.7rem 1.3rem;
   border-radius: 8px; text-decoration: none; display: inline-flex; align-items: center; gap: 0.5rem;
@@ -84,8 +122,22 @@ footer .sep { margin: 0 0.6rem; opacity: 0.5; }
 <main>
   <div class="hero-wrap"><img src="assets/wraithflow-hero.svg" alt="WraithFlow"></div>
   <div class="cta-row">
-    <a class="btn primary" href="#install">Get started</a>
     <a class="btn ghost" href="https://github.com/darkstardevx/wraithflow" target="_blank" rel="noopener">View source ↗</a>
+  </div>
+
+  <div class="installer">
+    <div class="os-tabs" role="tablist" aria-label="Choose your OS">
+      <button class="os-tab" data-os="linux" role="tab">Linux</button>
+      <button class="os-tab" data-os="macos" role="tab">macOS</button>
+    </div>
+    <div class="install-row">
+      <span class="install-label">Install:</span>
+      <div class="install-code-box">
+        <code id="install-cmd-display">curl -fsSL https://raw.githubuserconten&hellip;</code>
+      </div>
+      <button class="copy-btn" id="copy-btn" title="Copy to clipboard" aria-label="Copy install command">⧉</button>
+      <a class="more-link" href="#install">More options&hellip;</a>
+    </div>
   </div>
 
   <section class="feature">
@@ -182,5 +234,72 @@ wraithflow --admin --status</div>
     <a href="https://darkstardevx.github.io" target="_blank" rel="noopener">Cybercore ecosystem ↗</a>
   </footer>
 </main>
+
+<script>
+(function () {
+  // Windows isn't offered here on purpose: wraithflow's control socket
+  // (and wf-tui, which depends on it entirely) uses Unix-domain-socket
+  // APIs unconditionally -- confirmed via a real `cargo check --target
+  // x86_64-pc-windows-gnu`, not assumed -- so there's no honest command
+  // to show for it yet.
+  var COMMANDS = {
+    linux: "curl -fsSL https://raw.githubusercontent.com/darkstardevx/wraithflow/main/install.sh | sh",
+    macos: "curl -fsSL https://raw.githubusercontent.com/darkstardevx/wraithflow/main/install.sh | sh"
+  };
+  var DISPLAY = {
+    linux: "curl -fsSL https://raw.githubuserconten&hellip;",
+    macos: "curl -fsSL https://raw.githubuserconten&hellip;"
+  };
+
+  var tabs = document.querySelectorAll(".os-tab");
+  var display = document.getElementById("install-cmd-display");
+  var copyBtn = document.getElementById("copy-btn");
+  var current = "linux";
+
+  function detectOS() {
+    var ua = (navigator.userAgent || "").toLowerCase();
+    return ua.indexOf("mac") !== -1 ? "macos" : "linux";
+  }
+
+  function setOS(os) {
+    current = os;
+    tabs.forEach(function (t) {
+      t.classList.toggle("active", t.getAttribute("data-os") === os);
+    });
+    display.innerHTML = DISPLAY[os];
+  }
+
+  tabs.forEach(function (t) {
+    t.addEventListener("click", function () { setOS(t.getAttribute("data-os")); });
+  });
+
+  copyBtn.addEventListener("click", function () {
+    var text = COMMANDS[current];
+    var done = function () {
+      copyBtn.textContent = "✓";
+      copyBtn.classList.add("copied");
+      setTimeout(function () {
+        copyBtn.textContent = "⧉";
+        copyBtn.classList.remove("copied");
+      }, 1500);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, done);
+    } else {
+      var ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand("copy"); } catch (e) {}
+      document.body.removeChild(ta);
+      done();
+    }
+  });
+
+  setOS(detectOS());
+})();
+</script>
 </body>
 </html>
