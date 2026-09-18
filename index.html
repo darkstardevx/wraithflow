@@ -208,6 +208,7 @@ curl -fsSL https://raw.githubusercontent.com/darkstardevx/wraithflow/main/instal
 wraithflow --admin --start
 wraithflow --admin --status</div>
     </div>
+    <p class="lede" id="dl-count" style="margin-top:0.75rem;font-size:0.82rem;">&hellip;</p>
   </section>
 
   <section class="feature">
@@ -299,6 +300,19 @@ wraithflow --admin --status</div>
   });
 
   setOS(detectOS());
+})();
+
+(function () {
+  var el = document.getElementById("dl-count");
+  fetch("https://api.github.com/repos/darkstardevx/wraithflow/releases/latest", { headers: { Accept: "application/vnd.github+json" } })
+    .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+    .then(function (rel) {
+      var dl = (rel.assets || [])
+        .filter(function (a) { return !a.name.endsWith(".sha256"); })
+        .reduce(function (sum, a) { return sum + (a.download_count || 0); }, 0);
+      el.textContent = dl.toLocaleString() + " downloads (" + rel.tag_name + ")";
+    })
+    .catch(function () { el.textContent = ""; });
 })();
 </script>
 </body>
