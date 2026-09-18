@@ -193,8 +193,17 @@ log_payloads = <span class="c1">false</span>  <span class="dim">// anything carr
     </div>
   </section>
 
+  <section class="feature">
+    <div class="feature-head"><span class="feature-num">05</span><h2>Browsing captured traffic — Echo</h2></div>
+    <p class="lede">stdout/journalctl is fine for tailing, not for actually browsing. Set <code>capture_log</code> to also write every logged packet to a shared JSONL file — <a href="https://darkstardevx.github.io/echo/" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;">Echo</a> (<code>wf-echo</code>) tails it and gives you a real flow list: filter, search, inspect, follow live or pause to browse history. Same redaction already applied — an additional sink for the exact same content, not a second logging decision.</p>
+    <div class="term">
+      <div class="term-bar"><span class="term-dot d1"></span><span class="term-dot d2"></span><span class="term-dot d3"></span><span class="term-title">config.toml</span></div>
+      <div class="term-body">capture_log = <span class="c2">"~/.local/state/wraithflow/captures.jsonl"</span>  <span class="dim">// omit to disable</span></div>
+    </div>
+  </section>
+
   <section class="feature" id="install">
-    <div class="feature-head"><span class="feature-num">05</span><h2>Install &amp; run</h2></div>
+    <div class="feature-head"><span class="feature-num">06</span><h2>Install &amp; run</h2></div>
     <p class="lede">Prebuilt binaries for Linux (x86_64/aarch64) and macOS (x86_64/aarch64), checksum-verified before they touch disk. No release for your platform, or no curl? <code>cargo install --git</code> works from source on anything.</p>
     <div class="install-tabs">
       <span class="tab active">curl | sh</span><span class="tab">cargo</span><span class="tab">admin</span>
@@ -231,6 +240,8 @@ wraithflow --admin --status</div>
 
   <footer>
     <a href="https://github.com/darkstardevx/wraithflow" target="_blank" rel="noopener">GitHub ↗</a>
+    <span class="sep">·</span>
+    <a href="https://darkstardevx.github.io/echo/" target="_blank" rel="noopener">Echo (companion) ↗</a>
     <span class="sep">·</span>
     <a href="https://darkstardevx.github.io" target="_blank" rel="noopener">Cybercore ecosystem ↗</a>
   </footer>
