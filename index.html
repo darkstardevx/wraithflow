@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WraithFlow — Feature Sections</title>
+<meta name="description" content="WraithFlow — stealth traffic network proxy and analyzer, config-driven TCP pipelines in Rust.">
+<link rel="icon" type="image/svg+xml" href="assets/wraithflow-favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --void: #09060d;
+  --panel: #0f0a16;
+  --panel2: #150e1f;
+  --line: #2e1a3d;
+  --purple: #9b56ff;
+  --purple-dim: #6c2bd9;
+  --ember: #ff6a00;
+  --ember-lt: #ffb347;
+  --acid: #b7ff3c;
+  --text: #f1e9e0;
+  --muted: #a78cb8;
+  --dim: #6d5b7d;
+  --sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --mono: 'JetBrains Mono', 'SFMono-Regular', ui-monospace, monospace;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; background: var(--void); color: var(--text); font-family: var(--sans); }
+main { max-width: 1000px; margin: 0 auto; padding: 0 1.5rem 5rem; }
+
+.hero-wrap { margin-bottom: 1rem; }
+.hero-wrap img { width: 100%; height: auto; display: block; }
+
+.cta-row { display: flex; flex-wrap: wrap; gap: 0.7rem; justify-content: center; margin: -2rem 0 5rem; position: relative; z-index: 2; }
+.btn {
+  font-family: var(--mono); font-size: 0.82rem; font-weight: 600; padding: 0.7rem 1.3rem;
+  border-radius: 8px; text-decoration: none; display: inline-flex; align-items: center; gap: 0.5rem;
+}
+.btn.primary { background: linear-gradient(90deg, var(--ember-lt), var(--ember)); color: #1a0a00; }
+.btn.ghost { background: var(--panel); border: 1px solid var(--line); color: var(--text); }
+.btn.ghost:hover { border-color: var(--purple); }
+
+section.feature { margin-bottom: 5.5rem; }
+.feature-head { display: flex; align-items: baseline; gap: 0.85rem; margin-bottom: 0.6rem; }
+.feature-num { font-family: var(--mono); font-size: 0.8rem; color: var(--dim); }
+.feature h2 { font-size: 1.7rem; margin: 0; font-weight: 800; letter-spacing: -0.01em; }
+.feature .lede { color: var(--muted); font-size: 1.02rem; line-height: 1.7; max-width: 62ch; margin: 0 0 1.5rem; }
+.feature .lede code { color: var(--acid); background: var(--panel); padding: 0.1em 0.4em; border-radius: 4px; font-size: 0.9em; }
+
+.term {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden;
+  box-shadow: 0 24px 60px -30px rgba(155, 86, 255, 0.25);
+}
+.term-bar { display: flex; align-items: center; gap: 0.5rem; padding: 0.65rem 0.9rem; background: var(--panel2); border-bottom: 1px solid var(--line); }
+.term-dot { width: 10px; height: 10px; border-radius: 50%; }
+.term-dot.d1 { background: var(--ember); } .term-dot.d2 { background: var(--purple); } .term-dot.d3 { background: var(--acid); }
+.term-title { margin-left: 0.5rem; font-family: var(--mono); font-size: 0.74rem; color: var(--dim); }
+.term-body { padding: 1.1rem 1.3rem; font-family: var(--mono); font-size: 0.83rem; line-height: 1.75; overflow-x: auto; }
+.term-body .c1 { color: var(--acid); } .term-body .c2 { color: var(--ember-lt); } .term-body .c3 { color: var(--purple); }
+.term-body .dim { color: var(--dim); }
+.term-body .k { color: #7fd6ff; }
+
+.divider-wrap { margin: 4rem 0; }
+.divider-wrap img { width: 100%; height: auto; display: block; opacity: 0.85; }
+
+.install-tabs { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 1rem; }
+.tab { font-family: var(--mono); font-size: 0.76rem; padding: 0.4rem 0.85rem; border-radius: 999px; background: var(--panel); border: 1px solid var(--line); color: var(--muted); }
+.tab.active { border-color: var(--ember); color: var(--ember-lt); }
+
+.feat-list { columns: 2; column-gap: 2.5rem; font-family: var(--mono); font-size: 0.86rem; color: var(--muted); line-height: 2.1; }
+.feat-list li::marker { color: var(--acid); }
+@media (max-width: 640px) { .feat-list { columns: 1; } }
+
+footer { text-align: center; padding: 2rem 1.5rem 3rem; color: var(--dim); font-size: 0.78rem; font-family: var(--mono); }
+footer a { color: var(--muted); text-decoration: none; }
+footer a:hover { color: var(--ember-lt); }
+footer .sep { margin: 0 0.6rem; opacity: 0.5; }
+</style>
+</head>
+<body>
+<main>
+  <div class="hero-wrap"><img src="assets/wraithflow-hero.svg" alt="WraithFlow"></div>
+  <div class="cta-row">
+    <a class="btn primary" href="#install">Get started</a>
+    <a class="btn ghost" href="https://github.com/darkstardevx/wraithflow" target="_blank" rel="noopener">View source ↗</a>
+  </div>
+
+  <section class="feature">
+    <div class="feature-head"><span class="feature-num">01</span><h2>Config-driven pipelines</h2></div>
+    <p class="lede">Any number of <code>[[proxies]]</code> in one file. Each pipeline is its own async task — one crashing doesn't take the others down. No protocol awareness required: full-duplex, byte-for-byte.</p>
+    <div class="term">
+      <div class="term-bar"><span class="term-dot d1"></span><span class="term-dot d2"></span><span class="term-dot d3"></span><span class="term-title">config.toml</span></div>
+      <div class="term-body"><span class="dim">stats_interval_secs = 30</span>
+
+<span class="c3">[[proxies]]</span>
+name = <span class="c2">"http-traffic-gateway"</span>
+listen = <span class="c2">"127.0.0.1:45634"</span>
+target = <span class="c2">"127.0.0.1:9000"</span>
+output = <span class="c2">"json-pretty"</span>
+
+<span class="c3">[[proxies]]</span>
+name = <span class="c2">"secure-db-relay"</span>
+listen = <span class="c2">"127.0.0.1:3306"</span>
+target = <span class="c2">"127.0.0.1:3307"</span>
+log_payloads = <span class="c1">false</span>  <span class="dim">// anything carrying secrets</span></div>
+    </div>
+  </section>
+
+  <section class="feature">
+    <div class="feature-head"><span class="feature-num">02</span><h2>See exactly what crosses the wire</h2></div>
+    <p class="lede">Per-pipeline output profiles — hexdump, pretty JSON, raw, base64 — with <code>redact</code> to mask secrets and <code>highlight</code> to call out what matters. Colors come from the shared cybercore CYBERGRID palette, not hardcoded ANSI.</p>
+    <div class="term">
+      <div class="term-bar"><span class="term-dot d1"></span><span class="term-dot d2"></span><span class="term-dot d3"></span><span class="term-title">wraithflow</span></div>
+      <div class="term-body"><span class="c1">[FLOW]</span> 127.0.0.1:45634 <span class="c2">→</span> 127.0.0.1:9000
+<span class="k">{</span> <span class="c3">"method"</span>: <span class="c2">"POST"</span>, <span class="c3">"path"</span>: <span class="c2">"/api/token"</span>, <span class="c3">"auth"</span>: <span class="c2">"***********"</span> <span class="k">}</span>
+<span class="dim">connections 12 · bytes 3.8 MiB · errors 0</span></div>
+    </div>
+  </section>
+
+  <div class="divider-wrap"><img src="assets/wraithflow-site-divider.svg" alt=""></div>
+
+  <section class="feature">
+    <div class="feature-head"><span class="feature-num">03</span><h2>Live stats, no journalctl scraping</h2></div>
+    <p class="lede">Every pipeline tracks connections, bytes each way, and errors — printed on an interval whether or not payload logging is on, and available on demand over a read-only Unix control socket.</p>
+    <div class="term">
+      <div class="term-bar"><span class="term-dot d1"></span><span class="term-dot d2"></span><span class="term-dot d3"></span><span class="term-title">socat</span></div>
+      <div class="term-body">$ <span class="c1">echo</span> <span class="c2">'{"cmd":"stats"}'</span> | socat - UNIX-CONNECT:/run/wraithflow/control.sock
+<span class="dim">{"pipelines":[{"name":"http-traffic-gateway","bytes_in":184320,"bytes_out":51200,"connections_active":3,"errors_total":0}]}</span></div>
+    </div>
+  </section>
+
+  <section class="feature">
+    <div class="feature-head"><span class="feature-num">04</span><h2>wf-tui — the live dashboard</h2></div>
+    <p class="lede">A separate binary over that same socket, so the daemon itself never carries <code>ratatui</code>/<code>crossterm</code>'s dependency tree. Symlinked into <code>~/.local/bin</code> next to <code>wraithflow</code> — no <code>cargo run -p</code> needed day to day.</p>
+    <div class="term">
+      <div class="term-bar"><span class="term-dot d1"></span><span class="term-dot d2"></span><span class="term-dot d3"></span><span class="term-title">wf-tui</span></div>
+      <div class="term-body">$ wf-tui --socket /run/wraithflow/control.sock --interval 1</div>
+    </div>
+  </section>
+
+  <section class="feature" id="install">
+    <div class="feature-head"><span class="feature-num">05</span><h2>Install &amp; run</h2></div>
+    <p class="lede">Prebuilt binaries for Linux (x86_64/aarch64) and macOS (x86_64/aarch64), checksum-verified before they touch disk. No release for your platform, or no curl? <code>cargo install --git</code> works from source on anything.</p>
+    <div class="install-tabs">
+      <span class="tab active">curl | sh</span><span class="tab">cargo</span><span class="tab">admin</span>
+    </div>
+    <div class="term">
+      <div class="term-bar"><span class="term-dot d1"></span><span class="term-dot d2"></span><span class="term-dot d3"></span><span class="term-title">shell</span></div>
+      <div class="term-body"><span class="dim"># detects OS/arch, verifies sha256, installs to ~/.local/bin</span>
+curl -fsSL https://raw.githubusercontent.com/darkstardevx/wraithflow/main/install.sh | sh
+
+<span class="dim"># run as a --user service, no sudo incantation needed</span>
+wraithflow --admin --start
+wraithflow --admin --status</div>
+    </div>
+  </section>
+
+  <section class="feature">
+    <div class="feature-head"><h2>Everything, at a glance</h2></div>
+    <ul class="feat-list">
+      <li>Any number of pipelines, one config file</li>
+      <li>Full-duplex, protocol-unaware forwarding</li>
+      <li>hexdump / JSON / raw / base64 output</li>
+      <li>Redact + highlight, substring-filtered</li>
+      <li>Per-pipeline min-size / direction filters</li>
+      <li>Live [STATS] line, configurable interval</li>
+      <li>Read-only Unix control socket, 0600</li>
+      <li>wf-tui — live terminal dashboard</li>
+      <li><code>--admin</code> service control, no sudo dance</li>
+      <li>Graceful shutdown, drains in-flight conns</li>
+      <li>Fails fast on bad config before binding</li>
+      <li>CYBERGRID-themed color output</li>
+    </ul>
+  </section>
+
+  <footer>
+    <a href="https://github.com/darkstardevx/wraithflow" target="_blank" rel="noopener">GitHub ↗</a>
+    <span class="sep">·</span>
+    <a href="https://darkstardevx.github.io" target="_blank" rel="noopener">Cybercore ecosystem ↗</a>
+  </footer>
+</main>
+</body>
+</html>
